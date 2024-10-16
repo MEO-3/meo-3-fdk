@@ -72,7 +72,7 @@ meo_me.reset();
 - This is an example of how to send a text message and a JSON message to a topic.
 - `meo_con.pubMessageToTopic(meo_me.messageStorage, "meo3/message");` is a function to publish a message to a topic.
 
-Currently in the early version 1, this FDK only supports one-way communication, which is sending messages to the MQTT broker. In the future, we will support two-way communication, which is sending and receiving messages from the MQTT broker.
+Currently in the early version 1, this FDK only supports one-way communication, which is sending messages to the MQTT broker, the callback is default Serial print. In the future, we will support two-way communication, which is sending and receiving messages into variable from the MQTT broker, by now it's recommended to write your own callback function.
 
 ### MeoMessage
 
