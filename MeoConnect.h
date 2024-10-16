@@ -14,6 +14,8 @@ public:
   void initConfig();
   void pubMessageToTopic(char* message, char* topic);
   void reconnect();
+  
+  static void defaultCallback(char* topic, byte* payload, int length);
 
   WiFiClient espClient = WiFiClient();
   PubSubClient client = PubSubClient(espClient);
