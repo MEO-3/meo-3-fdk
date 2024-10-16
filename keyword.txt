@@ -1,0 +1,23 @@
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+MeoConnect	KEYWORD1
+MeoMessage  KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+setWifiConfig     KEYWORD2
+setMqttConfig     KEYWORD2
+initConfig        KEYWORD2
+pubMessageToTopic KEYWORD2
+reconnect         KEYWORD2
+
+textMessageSetter KEYWORD2
+jsonMessageSetter KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
