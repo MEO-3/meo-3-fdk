@@ -32,8 +32,8 @@ void MeoConnect::initConfig() {
 }
 
 void MeoConnect::reconnect() {
+  Serial.print("Attempting MQTT connection");
   while (!client.connected()) {
-    Serial.print("Attempting MQTT connection");
     if (client.connect("MEO-3")) {
       Serial.println("\nConnected to MQTT Broker");
       client.publish("meo3/test", "Hello world from Arduino - MEO!");
