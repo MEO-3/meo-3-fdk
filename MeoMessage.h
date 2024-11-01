@@ -9,6 +9,7 @@ class MeoMessage {
 public:
   MeoMessage();
   void textMessageSetter(char* input);
+  void textMessageSetter(String input);
   void jsonMessageSetter();
   void reset();
 
