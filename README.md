@@ -106,3 +106,9 @@ meo_me.jsonMessageStorage;
 - `meo_me.messageStorage` is a string variable that stores the message.
 - `meo_me.jsonMessageStorage` is a string variable that stores the JSON message.
 - Developers can access these variables to get the message and JSON message.
+
+
+## Versioning
+
+- Version 1.0.0: Initial version of the MEO 3 FDK.
+- Version 1.1.0: Overload function for textMessageSetter.
