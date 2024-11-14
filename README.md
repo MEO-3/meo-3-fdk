@@ -111,4 +111,4 @@ meo_me.jsonMessageStorage;
 ## Versioning
 
 - Version 1.0.0: Initial version of the MEO 3 FDK.
-- Version 1.1.0: Overload function for textMessageSetter.
+- Version 1.1.0: Overload function for textMessageSetter. (Current version)
