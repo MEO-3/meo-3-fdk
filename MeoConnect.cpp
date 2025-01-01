@@ -1,3 +1,4 @@
+#include "HardwareSerial.h"
 #include "MeoConnect.h"
 
 #include <WiFi.h>
@@ -26,6 +27,7 @@ void MeoConnect::initConfig() {
   Serial.println("");
   Serial.println("Connected to WiFi");
   Serial.println("IP address: " + WiFi.localIP().toString());
+  Serial.printf("MQTT Client: %s\n", WiFi.macAddress().c_str());
 
   client.setServer(this->mqttServer, this->mqttPort);
   client.setCallback(defaultCallback);
@@ -34,7 +36,7 @@ void MeoConnect::initConfig() {
 void MeoConnect::reconnect() {
   Serial.print("Attempting MQTT connection");
   while (!client.connected()) {
-    if (client.connect("MEO-3")) {
+    if (client.connect(WiFi.macAddress().c_str())) {
       Serial.println("\nConnected to MQTT Broker");
       client.publish("meo3/test", "Hello world from Arduino - MEO!");
     } else {
