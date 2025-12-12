@@ -17,7 +17,7 @@ void onTurnOn(const MeoFeatureCall& call) {
 
 // Optional logger
 void meoLogger(const char* level, const char* message) {
-    Serial.print("[MEO ");
+    Serial.print("[");
     Serial.print(level);
     Serial.print("] ");
     Serial.println(message);
@@ -29,11 +29,11 @@ void setup() {
 
     meo.setLogger(meoLogger);
 
-    meo.beginWifi("Maker IoT", "langmaker");
+    meo.beginWifi("Rogo_Tenda", "nao123456");
     //   meo.begin("meo-open-service.local", 1883);
-    meo.begin("192.168.100.248", 1883);
+    meo.begin("192.168.0.200", 1883);
 
-    meo.setDeviceInfo("DIY Sensor", "ESP32-DevKit", "MEO DIY", MeoConnectionType::LAN);
+    meo.setDeviceInfo("DIY Sensor", "Test MEO Module", "ThingAI Lab", MeoConnectionType::LAN);
 
     meo.addFeatureEvent("sensor_update");
     meo.addFeatureMethod("turn_on", onTurnOn);
