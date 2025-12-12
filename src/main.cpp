@@ -33,6 +33,10 @@ void setup() {
     meo.begin("meo-open-service.local", 1883);
     // meo.begin("192.168.100.248", 1883);
 
+    // optionally set gateway ports for mDNS fallback or direct IP
+    // meo.setGateway("192.168.100.248", 8901, 1883);
+
+
     meo.setDeviceInfo("DIY Sensor", "Test MEO Module", "ThingAI Lab", MeoConnectionType::LAN);
 
     meo.addFeatureEvent("sensor_update");
