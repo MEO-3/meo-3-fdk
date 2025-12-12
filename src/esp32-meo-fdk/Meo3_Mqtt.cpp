@@ -119,6 +119,7 @@ bool MeoMqttClient::sendFeatureResponse(const MeoFeatureCall& call, bool success
     JsonObject data = doc.createNestedObject("params");
     data["feature_name"] = call.featureName;
     data["request_id"]  = call.requestId;
+    data["device_id"]   = call.deviceId;
     data["success"]     = success;
     if (message) {
         data["message"] = message;
