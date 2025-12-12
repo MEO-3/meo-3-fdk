@@ -29,9 +29,9 @@ void setup() {
 
     meo.setLogger(meoLogger);
 
-    meo.beginWifi("Rogo_Tenda", "nao123456");
-    //   meo.begin("meo-open-service.local", 1883);
-    meo.begin("192.168.0.200", 1883);
+    meo.beginWifi("Maker IoT", "langmaker");
+    meo.begin("meo-open-service.local", 1883);
+    // meo.begin("192.168.100.248", 1883);
 
     meo.setDeviceInfo("DIY Sensor", "Test MEO Module", "ThingAI Lab", MeoConnectionType::LAN);
 
