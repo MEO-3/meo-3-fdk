@@ -1,11 +1,16 @@
 #include <Arduino.h>
 #include "esp32-meo-fdk/Meo3_Device.h"
 
+#define LED_BUILTIN 2
+
 MeoDevice meo;
 
 // Example feature callback
 void onTurnOn(const MeoFeatureCall& call) {
     Serial.println("Feature 'turn_on' invoked");
+    Serial.println("Viet Ngu");
+    // Trigger turn on Module LED
+    digitalWrite(LED_BUILTIN, HIGH);
     for (const auto& kv : call.params) {
         Serial.print("  ");
         Serial.print(kv.first);
@@ -30,7 +35,7 @@ void setup() {
     meo.setLogger(meoLogger);
 
     meo.beginWifi("Maker IoT", "langmaker");
-    meo.begin("meo-open-service.local", 1883);
+    meo.begin("meo-open-service.local", 1883); // optional, dont need to modify
     // meo.begin("192.168.100.248", 1883);
 
     // optionally set gateway ports for mDNS fallback or direct IP
