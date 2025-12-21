@@ -1,5 +1,5 @@
 {
-  "name": "Meo3_Device",
+  "name": "Meo3_Arduino",
   "version": "1.0.0",
   "description": "A library of MEO project, enable DIY device to connect MEO platform easily.",
   "keywords": "MEO, IoT, Device, Platform, DIY",
@@ -24,7 +24,7 @@
   "platforms": ["espressif32"],
   "export": {
     "include": [
-      "src/*",
+      "src/Meo3_Arduino/**/*",
       "examples/*",
       "library.json",
       "README.md"

@@ -1,0 +1,40 @@
+#######################################
+# Syntax Highlighting for Meo3_Arduino
+#######################################
+
+# Datatypes (Classes, Structs, Enums, Typedefs)
+MeoDevice	KEYWORD1
+MeoMqttClient	KEYWORD1
+MeoRegistrationClient	KEYWORD1
+MeoStorage	KEYWORD1
+MeoConnectionType	KEYWORD1
+MeoDeviceInfo	KEYWORD1
+MeoEventPayload	KEYWORD1
+MeoFeatureCall	KEYWORD1
+MeoFeatureRegistry	KEYWORD1
+MeoFeatureCallback	KEYWORD1
+MeoLogFunction	KEYWORD1
+
+# Methods and Functions
+begin	KEYWORD2
+beginWifi	KEYWORD2
+setGateway	KEYWORD2
+setDeviceInfo	KEYWORD2
+addFeatureEvent	KEYWORD2
+addFeatureMethod	KEYWORD2
+start	KEYWORD2
+loop	KEYWORD2
+isRegistered	KEYWORD2
+isMqttConnected	KEYWORD2
+publishEvent	KEYWORD2
+sendFeatureResponse	KEYWORD2
+setLogger	KEYWORD2
+loadCredentials	KEYWORD2
+saveCredentials	KEYWORD2
+clearCredentials	KEYWORD2
+configure	KEYWORD2
+registerIfNeeded	KEYWORD2
+
+# Constants and Enum Values
+LAN	LITERAL1
+UART	LITERAL1
