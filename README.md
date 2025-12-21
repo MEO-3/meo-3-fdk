@@ -26,7 +26,6 @@ This library simplifies connecting ESP32 and other Arduino-framework devices to 
 ```cpp
 #include <Meo3_Device.h>
 #include <WiFi.h> // Ensure WiFi is included for ESP32
-
 ```
 
 ### 2. Create the Device Object
