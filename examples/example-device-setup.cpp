@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "esp32-meo-fdk/Meo3_Device.h"
+#include <Meo3_Device.h>
 
 #define LED_BUILTIN 2
 

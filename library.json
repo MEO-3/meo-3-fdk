@@ -1,0 +1,33 @@
+{
+  "name": "Meo3_Device",
+  "version": "1.0.0",
+  "description": "A library of MEO project, enable DIY device to connect MEO platform easily.",
+  "keywords": "MEO, IoT, Device, Platform, DIY",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/MEO-3/meo-3-fdk.git"
+  },
+  "authors":
+  [
+    {
+      "name": "Luong The Vinh",
+      "email": "everwellmax@gmail.com"
+    }
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "knolleary/PubSubClient": "^2.8",
+    "bblanchon/ArduinoJson": "^6.18.5"
+  },
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "export": {
+    "include": [
+      "src/*",
+      "examples/*",
+      "library.json",
+      "README.md"
+    ]
+  }
+}
