@@ -24,10 +24,13 @@
   "platforms": ["espressif32"],
   "export": {
     "include": [
-      "src/Meo3_Arduino/**/*",
+      "src/*",
       "examples/*",
       "library.json",
       "README.md"
+    ],
+    "exclude": [
+      "src/main.cpp"
     ]
   }
 }
