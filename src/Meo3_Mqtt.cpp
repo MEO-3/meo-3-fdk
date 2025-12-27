@@ -180,31 +180,69 @@ void MeoMqttClient::_onMqttMessage(char* topic, uint8_t* payload, unsigned int l
     }
 
     // Parse JSON payload
-    String json;
-    json.reserve(length + 1);
-    for (unsigned int i = 0; i < length; i++) {
-        json += static_cast<char>(payload[i]);
-    }
+    // String json;
+    // json.reserve(length + 1);
+    // for (unsigned int i = 0; i < length; i++) {
+    //     json += static_cast<char>(payload[i]);
+    // }
 
+    char json[512];
+    for(unsigned int i = 0; i < length && i < sizeof(json) - 1; i++) {
+        json[i] = static_cast<char>(payload[i]);
+    }
+    json[length < sizeof(json) ? length : sizeof(json) - 1] = '\0';
+    // if (_logger) {
+    //     String msg = "Feature invoke JSON: " + json;
+    //     _logger("DEBUG", msg.c_str());
+    // }
+    if(_logger) {
+        String msg = "Feature invoke JSON: ";
+        msg += String(json);
+        _logger("DEBUG", msg.c_str());
+    }
     StaticJsonDocument<512> doc;
-    DeserializationError err = deserializeJson(doc, json);
-    if (err) {
-        if (_logger) {
-            String msg = "Failed to parse feature JSON: ";
-            msg += err.c_str();
-            _logger("ERROR", msg.c_str());
+    try {
+        DeserializationError err = deserializeJson(doc, json);
+        if (err) {
+            if (_logger) {
+                String msg = "Failed to parse feature JSON: ";
+                msg += err.c_str();
+                _logger("ERROR", msg.c_str());
+            }
+            return;
         }
+    } catch (...) {
+        if (_logger) _logger("ERROR", "Exception during JSON deserialization");
         return;
     }
+
+    // if (_logger) {
+    //     String msg = "Parsed feature JSON successfully";
+    //     _logger("DEBUG", msg.c_str());
+    // }
 
     MeoFeatureCall call;
     call.deviceId = deviceId;
     call.featureName = featureName;
     call.requestId = doc["request_id"] | "";
 
+    // if (_logger) {
+    //     String msg = "Invoking feature: " + call.featureName + " (request_id: " + call.requestId + ")";
+    //     _logger("INFO", msg.c_str());
+    // }
+
     JsonObject params = doc["params"];
     if (!params.isNull()) {
         for (JsonPair kv : params) {
+            
+            if (_logger) {
+                String msg = "  Param: ";
+                msg += String(kv.key().c_str());
+                msg += " = ";
+                msg += String(kv.value().as<const char*>());
+                _logger("DEBUG", msg.c_str());
+            }
+
             call.params[String(kv.key().c_str())] = String(kv.value().as<const char*>());
         }
     }
