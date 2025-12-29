@@ -84,10 +84,8 @@ bool MeoMqttClient::publishEvent(const char* eventName, const MeoEventPayload& p
     String topic = "meo/" + _deviceId + "/event" + "/" + String(eventName);
 
     StaticJsonDocument<512> doc;
-    doc["event_name"] = eventName;
-    JsonObject params = doc.createNestedObject("params");
     for (const auto& kv : payload) {
-        params[kv.first] = kv.second;
+        doc[kv.first] = kv.second;
     }
 
     char buffer[512];
@@ -115,14 +113,12 @@ bool MeoMqttClient::sendFeatureResponse(const MeoFeatureCall& call, bool success
     String topic = "meo/" + _deviceId + "/event/feature_response";
 
     StaticJsonDocument<512> doc;
-    doc["event_name"] = "feature_response";
-    JsonObject data = doc.createNestedObject("params");
-    data["feature_name"] = call.featureName;
-    data["request_id"]  = call.requestId;
-    data["device_id"]   = call.deviceId;
-    data["success"]     = success;
+    doc["feature_name"] = call.featureName;
+    doc["request_id"]  = call.requestId;
+    doc["device_id"]   = call.deviceId;
+    doc["success"]     = success;
     if (message) {
-        data["message"] = message;
+        doc["message"] = message;
     }
 
     char buffer[512];
