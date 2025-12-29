@@ -81,7 +81,7 @@ bool MeoMqttClient::publishEvent(const char* eventName, const MeoEventPayload& p
         return false;
     }
 
-    String topic = "meo/" + _deviceId + "/event";
+    String topic = "meo/" + _deviceId + "/event" + "/" + String(eventName);
 
     StaticJsonDocument<512> doc;
     doc["event_name"] = eventName;
@@ -112,7 +112,7 @@ bool MeoMqttClient::sendFeatureResponse(const MeoFeatureCall& call, bool success
     }
 
     // You can define a dedicated response topic; here we'll re-use "event" with a special type
-    String topic = "meo/" + _deviceId + "/event";
+    String topic = "meo/" + _deviceId + "/event/feature_response";
 
     StaticJsonDocument<512> doc;
     doc["event_name"] = "feature_response";
