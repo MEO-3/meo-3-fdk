@@ -28,6 +28,7 @@
 
 // Additional provisioning characteristics used by the implementation
 #define CH_UUID_TX_KEY              "9f27f7fa-0000-1000-8000-00805f9b34fb" // WO - Transmit Key (MQTT password)
+#define CH_UUID_DEV_ID              "9f27f7fb-0000-1000-8000-00805f9b34fb" // RW - Device ID (defaults to MAC-based ID if not set)
 
 class MeoBleProvision {
 public:

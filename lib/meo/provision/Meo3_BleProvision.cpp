@@ -162,6 +162,11 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
         _logger("INFO", "Transmit Key updated");
         return;
     }
+    if (uuid.equals(NimBLEUUID(CH_UUID_DEV_ID))) {
+        _storage->saveString("device_id", s);
+        _logger("INFO", "Device ID updated");
+        return;
+    }
 }
 
 bool MeoBleProvision::_debugTagEnabled(const char* tag) const {
