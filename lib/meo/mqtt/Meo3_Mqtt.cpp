@@ -106,10 +106,10 @@ bool MeoMqttClient::connect() {
     bool ok = false;
     if (_willTopic) {
         ok = _mqtt.connect(clientId.c_str(),
-                           "edgemqtt", _txKey,
+                           "aviscts", _txKey,
                            _willTopic, _willQos, _willRetain, _willPayload);
     } else {
-        ok = _mqtt.connect(clientId.c_str(), "edgemqtt", _txKey);
+        ok = _mqtt.connect(clientId.c_str(), "aviscts", _txKey);
     }
 
     _log("DEBUG", clientId.c_str(), _txKey);
