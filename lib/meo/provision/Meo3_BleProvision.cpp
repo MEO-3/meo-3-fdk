@@ -61,6 +61,7 @@ void MeoBleProvision::_bindWriteHandlers() {
     _ble->setCharWriteHandler(_chPass,  &MeoBleProvision::_onWriteStatic, this);
     _ble->setCharWriteHandler(_chUserId, &MeoBleProvision::_onWriteStatic, this);
     _ble->setCharWriteHandler(_chTxKey, &MeoBleProvision::_onWriteStatic, this);
+    _ble->setCharWriteHandler(_chDevId, &MeoBleProvision::_onWriteStatic, this);
 }
 
 void MeoBleProvision::startAdvertising() { if (_ble) _ble->startAdvertising(); }
