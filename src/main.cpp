@@ -1,14 +1,14 @@
 #include <Arduino.h>
 #include <Meo3_Device.h>
 
-#define LED_BUILTIN LED_BUILTIN
+#define LED_PIN 7
 
 MeoDevice meo;
 
 // Example feature callback
 void onTurnOn(const MeoFeatureCall& call) {
     Serial.println("Feature 'turn_on_led' invoked");
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_PIN, HIGH);
 
     int first = 0, second = 0;
     for (const auto& kv : call.params) {
@@ -35,7 +35,7 @@ void setup() {
     delay(1000);
     Serial.println("Starting MEO Device...");
     
-    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(LED_PIN, OUTPUT);
 
     meo.setLogger(meoLogger);
     meo.setDeviceInfo("MEO Test Device", "ThingAI Lab");

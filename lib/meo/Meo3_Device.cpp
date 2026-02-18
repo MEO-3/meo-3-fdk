@@ -139,12 +139,13 @@ bool MeoDevice::start() {
         _log("WARN", "DEVICE", "Waiting for WiFi/credentials via BLE provisioning");
         return false;
     }
+    _log("INFO", "DEVICE", "WiFi connected and credentials available; connecting MQTT");
 
     // PATCH: stop BLE advertising once WiFi is connected (if BLE was already advertising)
-    // if (_wifiReady) {
-    //     _prov.stopAdvertising();
-    //     _log("INFO", "DEVICE", "WiFi connected; stopped BLE advertising");
-    // }
+    if (_wifiReady && hasCredentials()) {
+        _prov.stopAdvertising();
+        _log("INFO", "DEVICE", "WiFi connected; stopped BLE advertising");
+    }
 
     // MQTT connect + declare
     return _connectMqttAndDeclare();
