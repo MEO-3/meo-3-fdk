@@ -77,6 +77,7 @@ private:
     NimBLECharacteristic*  _chMacAddr   = nullptr;
     NimBLECharacteristic*  _chUserId    = nullptr;
     NimBLECharacteristic*  _chTxKey     = nullptr;
+    NimBLECharacteristic*  _chDevId     = nullptr;
 
     const char*         _wifiStatus;
     const char*         _mqttStatus;

@@ -116,19 +116,21 @@ bool MeoDevice::start() {
     _storage.loadString("tx_key", _transmitKey);
     // Load optional user id (top-level MQTT namespace)
     _storage.loadString("user_id", _userId);
+
+    _storage.loadString("device_id", _deviceId);
     // device_id from ESP MAC (Ethernet MAC preferred)
-    uint8_t mac_raw[6] = {0};
-    esp_err_t r = esp_read_mac(mac_raw, ESP_MAC_ETH);
-    if (r != ESP_OK) {
-        esp_read_mac(mac_raw, ESP_MAC_WIFI_STA);
-    }
-    char macbuf[13]; // 12 hex chars + null
-    snprintf(macbuf, sizeof(macbuf), "%02X%02X%02X%02X%02X%02X",
-                mac_raw[0], mac_raw[1], mac_raw[2], mac_raw[3], mac_raw[4], mac_raw[5]);
-    _deviceId = std::string(macbuf);
-    if (_logger && _debugTagEnabled("DEVICE")) {
-        _logf("DEBUG", "DEVICE", "Generated device_id from MAC: %s", macbuf);
-    }
+    // uint8_t mac_raw[6] = {0};
+    // esp_err_t r = esp_read_mac(mac_raw, ESP_MAC_ETH);
+    // if (r != ESP_OK) {
+    //     esp_read_mac(mac_raw, ESP_MAC_WIFI_STA);
+    // }
+    // char macbuf[13]; // 12 hex chars + null
+    // snprintf(macbuf, sizeof(macbuf), "%02X%02X%02X%02X%02X%02X",
+    //             mac_raw[0], mac_raw[1], mac_raw[2], mac_raw[3], mac_raw[4], mac_raw[5]);
+    // _deviceId = std::string(macbuf);
+    // if (_logger && _debugTagEnabled("DEVICE")) {
+    //     _logf("DEBUG", "DEVICE", "Generated device_id from MAC: %s", macbuf);
+    // }
     _logf("INFO", "DEVICE", "Credentials %s", hasCredentials() ? "present" : "missing");
 
     // Only proceed if both WiFi and credentials are ready

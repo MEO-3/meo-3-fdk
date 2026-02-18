@@ -51,6 +51,7 @@ bool MeoBleProvision::_createServiceAndCharacteristics() {
     _chModel     = _ble->createCharacteristic(_svc, CH_UUID_DEV_MODEL,  NIMBLE_PROPERTY::READ);
     _chManuf     = _ble->createCharacteristic(_svc, CH_UUID_DEV_MANUF,  NIMBLE_PROPERTY::READ);
     _chTxKey     = _ble->createCharacteristic(_svc, CH_UUID_TX_KEY,     NIMBLE_PROPERTY::WRITE);
+    _chDevId     = _ble->createCharacteristic(_svc, CH_UUID_DEV_ID,     NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
 
     return _chSsid && _chPass && _chWifiList && _chModel && _chManuf && _chProductId && _chBuildInfo && _chMacAddr && _chUserId && _chTxKey;
 }
@@ -91,6 +92,7 @@ void MeoBleProvision::_loadInitialValues() {
         if (_chSsid) _chSsid->setValue(_wifiSsidStr);
     }
     if (_storage->loadString("user_id", tmp))   _chUserId->setValue(tmp);
+    if (_storage->loadString("device_id", tmp)) _chDevId->setValue(tmp);
     // MAC address: use the device's Ethernet MAC (ESP MAC), not BLE
     if (_chMacAddr) {
         uint8_t mac_raw[6] = {0};
