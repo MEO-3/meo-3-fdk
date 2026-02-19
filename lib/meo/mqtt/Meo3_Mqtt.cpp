@@ -105,16 +105,22 @@ bool MeoMqttClient::connect() {
 
     bool ok = false;
     if (_willTopic) {
-        ok = _mqtt.connect(clientId.c_str(),
-                           "edgemqtt", _txKey,
-                           _willTopic, _willQos, _willRetain, _willPayload);
+        while (_mqtt.connect(clientId.c_str(),
+                              "edgemqtt", _txKey,
+                              _willTopic, _willQos, _willRetain, _willPayload) == false) {
+            _log("ERROR", "MQTT", "Connect failed, retrying in 1s");
+            delay(1000);
+        }
     } else {
-        ok = _mqtt.connect(clientId.c_str(), "edgemqtt", _txKey);
+        while (_mqtt.connect(clientId.c_str(), "edgemqtt", _txKey) == false) {
+            _log("ERROR", "MQTT", "Connect failed, retrying in 1s");
+            delay(1000);
+        }
+        
     }
 
-    _log("DEBUG", clientId.c_str(), _txKey);
-    _log(ok ? "INFO" : "ERROR", "MQTT", ok ? "Connected" : "Connect failed");
-    return ok;
+    _log("INFO", "MQTT", "Connected");
+    return true;
 }
 
 void MeoMqttClient::loop() {

@@ -142,13 +142,13 @@ bool MeoDevice::start() {
     _log("INFO", "DEVICE", "WiFi connected and credentials available; connecting MQTT");
 
     // PATCH: stop BLE advertising once WiFi is connected (if BLE was already advertising)
-    if (_wifiReady && _connectMqttAndDeclare()) {
+    if (_wifiReady && hasCredentials()) {
         _prov.stopAdvertising();
         _log("INFO", "DEVICE", "WiFi connected; stopped BLE advertising");
     }
 
     // MQTT connect + declare
-    return _mqtt.isConnected();
+    return _connectMqttAndDeclare();
 }
 
 void MeoDevice::loop() {
@@ -285,7 +285,9 @@ bool MeoDevice::_connectMqttAndDeclare() {
         std::string topic;
         if (_cloudCompatible) {
             // cloud-compatible: single topic where payload contains feature name
-            topic = base + _deviceId + "/feature";
+            // topic = base + _deviceId + "/feature"; debug
+            topic = base + _deviceId + "/feature/+/invoke";
+
         } else {
             // edge-compatible: topic encodes feature name in topic path
             topic = base + _deviceId + "/feature/+/invoke";
