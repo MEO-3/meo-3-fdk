@@ -100,19 +100,18 @@ bool MeoMqttClient::connect() {
     }
     if (_mqtt.connected()) return true;
 
-    String clientId = _deviceId ? String("meo-") + _deviceId
-                                : String("meo-device-") + String((uint32_t)millis());
+    const char* clientIdCStr = _deviceId;
 
     bool ok = false;
     if (_willTopic) {
-        while (_mqtt.connect(clientId.c_str(),
+        while (_mqtt.connect(clientIdCStr,
                               "edgemqtt", _txKey,
                               _willTopic, _willQos, _willRetain, _willPayload) == false) {
             _log("ERROR", "MQTT", "Connect failed, retrying in 1s");
             delay(1000);
         }
     } else {
-        while (_mqtt.connect(clientId.c_str(), "edgemqtt", _txKey) == false) {
+        while (_mqtt.connect(clientIdCStr, "edgemqtt", _txKey) == false) {
             _log("ERROR", "MQTT", "Connect failed, retrying in 1s");
             delay(1000);
         }
