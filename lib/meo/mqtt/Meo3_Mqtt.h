@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
-#include <WiFiClientSecure.h>
+// #include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 #include <PubSubClient.h>
 #include "../Meo3_Type.h" // MeoLogFunction
 
@@ -67,7 +68,7 @@ private:
     uint8_t      _willQos = 0;
     bool         _willRetain = true;
 
-    WiFiClientSecure   _wifiClient;
+    WiFiClient   _wifiClient;
     PubSubClient _mqtt;
 
     OnMessageFn  _onMessage = nullptr;

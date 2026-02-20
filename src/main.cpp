@@ -40,7 +40,7 @@ void setup() {
     meo.setLogger(meoLogger);
     meo.setDeviceInfo("MEO Device", "ThingAI");
     meo.setCloudCompatibleInfo("product-1234", "build-20240601");
-    meo.setGateway("2cd0d770fc9e4de99263e34330dc866e.s1.eu.hivemq.cloud", 8883);
+    meo.setGateway("192.168.0.106", 1883);
     meo.setDebugTags("DEVICE,MQTT,PROV");
 
     meo.addFeatureMethod("turn_on_led", onTurnOn);

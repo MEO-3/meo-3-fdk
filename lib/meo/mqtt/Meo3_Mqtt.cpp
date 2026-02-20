@@ -41,7 +41,7 @@ const char* rootCa = "-----BEGIN CERTIFICATE-----\n"
 
 MeoMqttClient::MeoMqttClient() {
     _self = this; // one active instance
-    _wifiClient.setCACert(rootCa);
+    // _wifiClient.setCACert(rootCa);
     _mqtt.setClient(_wifiClient);
     _mqtt.setBufferSize(1024);
     _mqtt.setKeepAlive(15);
