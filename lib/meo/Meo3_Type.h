@@ -39,6 +39,7 @@ struct MeoFeatureCall {
 
 // Callback type for feature handlers
 using MeoFeatureCallback = std::function<void(const MeoFeatureCall&)>;
+using MeoSimpleCommandCallback = std::function<void()>;
 
 // Registry of supported features
 struct MeoFeatureRegistry {

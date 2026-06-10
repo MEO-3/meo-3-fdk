@@ -5,7 +5,23 @@
 #include <stdarg.h>
 #include <esp_system.h>
 
-MeoDevice::MeoDevice() {}
+MeoDevice::MeoDevice()
+    : _deviceName("MEO Device"),
+      _profileId("meo-profile-generic-v1"),
+      _model("MEO Device"),
+      _manufacturer("ThingAI"),
+      _wifiSsid(nullptr),
+      _wifiPass(nullptr),
+      _gatewayHost("meo-open-service.local") {}
+
+MeoDevice::MeoDevice(const char* deviceName, const char* profileId)
+    : _deviceName(deviceName && deviceName[0] ? deviceName : "MEO Device"),
+      _profileId(profileId && profileId[0] ? profileId : "meo-profile-generic-v1"),
+      _model(_deviceName),
+      _manufacturer("ThingAI"),
+      _wifiSsid(nullptr),
+      _wifiPass(nullptr),
+      _gatewayHost("meo-open-service.local") {}
 
 void MeoDevice::setLogger(MeoLogFunction logger) {
     _logger = logger;
@@ -26,10 +42,17 @@ void MeoDevice::setDebugTags(const char* tagsCsv) {
 void MeoDevice::setDeviceInfo(const char* model,
                               const char* manufacturer) {
     _model = model;
+    if (model && model[0]) _deviceName = model;
     _manufacturer = manufacturer;
     _logf("DEBUG", "DEVICE", "Device info set: model=%s manufacturer=%s", 
         _model ? _model : "", _manufacturer ? _manufacturer : "");
     
+}
+
+void MeoDevice::setProfileId(const char* profileId) {
+    _profileId = profileId && profileId[0] ? profileId : "meo-profile-generic-v1";
+    _prov.setProfileId(_profileId);
+    _logf("DEBUG", "DEVICE", "Profile ID set: %s", _profileId ? _profileId : "");
 }
 
 void MeoDevice::beginWifi(const char* ssid, const char* pass) {
@@ -54,12 +77,6 @@ void MeoDevice::setGateway(const char* host, uint16_t mqttPort) {
     _logf("INFO", "DEVICE", "Gateway set: %s:%u", host ? host : "", mqttPort);
 }
 
-void MeoDevice::setCloudCompatibleInfo(const char* productId, const char* buildInfo) {
-    _prov.setCloudCompatibleInfo(productId, buildInfo);
-    // mark device as cloud-compatible when a productId is provided
-    _cloudCompatible = (productId && productId[0]);
-}
-
 bool MeoDevice::addFeatureEvent(const char* name) {
     if (!name || !*name || _eventCount >= MEO_MAX_FEATURE_EVENTS) return false;
     _eventNames[_eventCount++] = name;
@@ -80,6 +97,25 @@ bool MeoDevice::addFeatureMethod(const char* name, MeoFeatureCallback cb) {
     return true;
 }
 
+bool MeoDevice::onCommand(const char* name, MeoSimpleCommandCallback cb) {
+    if (!name || !*name || !cb) return false;
+    if (_simpleCommandCount >= MEO_MAX_FEATURE_METHODS) return false;
+    if (_methodCount >= MEO_MAX_FEATURE_METHODS) return false;
+
+    _simpleCommandNames[_simpleCommandCount] = name;
+    _simpleCommandHandlers[_simpleCommandCount] = cb;
+    _simpleCommandCount++;
+
+    _methodNames[_methodCount] = name;
+    _methodHandlers[_methodCount] = nullptr;
+    _methodCount++;
+    return true;
+}
+
+bool MeoDevice::onCommand(const char* name, MeoFeatureCallback cb) {
+    return addFeatureMethod(name, cb);
+}
+
 bool MeoDevice::start() {
     // Storage
     if (!_storage.begin()) {
@@ -87,13 +123,16 @@ bool MeoDevice::start() {
         return false;
     }
 
-    // BLE + Provisioning (model/manufacturer read-only via BLE)
-    _ble.begin(_model);
+    // BLE provisioning uses the open-service contract and profile ID.
+    std::string setupName = "MEO-Setup-";
+    setupName += _deviceName ? _deviceName : "Device";
+    _ble.begin(setupName.c_str());
     _prov.setLogger(_logger);
     _prov.setDebugTags(_debugTags);
-    _prov.begin(&_ble, &_storage, _model, _manufacturer);
-    _prov.setAutoRebootOnProvision(true, 500);
-    _prov.setRuntimeStatus(_wifiReady ? "connected" : "disconnected", "disconnected");
+    if (!_prov.begin(&_ble, &_storage, _deviceName, _profileId)) {
+        _log("ERROR", "DEVICE", "BLE provisioning init failed");
+        return false;
+    }
     _prov.startAdvertising();
     _log("INFO", "DEVICE", "BLE provisioning started");
 
@@ -112,34 +151,17 @@ bool MeoDevice::start() {
         }
     }
 
-    // Load credentials (pre-provisioned via BLE/app)
-    _storage.loadString("tx_key", _transmitKey);
-    // Load optional user id (top-level MQTT namespace)
-    _storage.loadString("user_id", _userId);
+    _ensureMacIdentity();
 
-    _storage.loadString("device_id", _deviceId);
-    // device_id from ESP MAC (Ethernet MAC preferred)
-    // uint8_t mac_raw[6] = {0};
-    // esp_err_t r = esp_read_mac(mac_raw, ESP_MAC_ETH);
-    // if (r != ESP_OK) {
-    //     esp_read_mac(mac_raw, ESP_MAC_WIFI_STA);
-    // }
-    // char macbuf[13]; // 12 hex chars + null
-    // snprintf(macbuf, sizeof(macbuf), "%02X%02X%02X%02X%02X%02X",
-    //             mac_raw[0], mac_raw[1], mac_raw[2], mac_raw[3], mac_raw[4], mac_raw[5]);
-    // _deviceId = std::string(macbuf);
-    // if (_logger && _debugTagEnabled("DEVICE")) {
-    //     _logf("DEBUG", "DEVICE", "Generated device_id from MAC: %s", macbuf);
-    // }
-    _logf("INFO", "DEVICE", "Credentials %s", hasCredentials() ? "present" : "missing");
+    _logf("INFO", "DEVICE", "Device identity %s", _deviceId.c_str());
 
-    // Only proceed if both WiFi and credentials are ready
+    // Only proceed if Wi-Fi and a MAC-derived identity are ready.
     if (!_wifiReady || !hasCredentials()) {
-        _prov.setRuntimeStatus(_wifiReady ? "connected" : "disconnected", "disconnected");
+        _prov.setProvisionState(_wifiReady ? "connected" : "received");
         _log("WARN", "DEVICE", "Waiting for WiFi/credentials via BLE provisioning");
-        return false;
+        return true;
     }
-    _log("INFO", "DEVICE", "WiFi connected and credentials available; connecting MQTT");
+    _log("INFO", "DEVICE", "WiFi connected and identity available; connecting MQTT");
 
     // PATCH: stop BLE advertising once WiFi is connected (if BLE was already advertising)
     if (_wifiReady && hasCredentials()) {
@@ -148,19 +170,33 @@ bool MeoDevice::start() {
     }
 
     // MQTT connect + declare
-    return _connectMqttAndDeclare();
+    if (!_connectMqttAndDeclare()) {
+        _nextMqttRetryAtMs = millis() + 5000;
+        _log("WARN", "DEVICE", "MQTT unavailable; will retry in loop()");
+    }
+    return true;
+}
+
+bool MeoDevice::begin() {
+    return start();
 }
 
 void MeoDevice::loop() {
-    // _prov.loop(); // BLE provisioning loop unused because after mqtt connect success we stop advertising
+    _prov.loop();
     _mqtt.loop();
+
+    if (!_wifiReady && WiFi.status() == WL_CONNECTED) {
+        _wifiReady = true;
+        _ensureMacIdentity();
+        _prov.setProvisionState("connected");
+        _log("INFO", "DEVICE", "WiFi connected after provisioning");
+    }
 
     // Update BLE status on change
     static wl_status_t lastWifi = WL_IDLE_STATUS;
     wl_status_t nowWifi = WiFi.status();
     if (nowWifi != lastWifi) {
-        _prov.setRuntimeStatus(nowWifi == WL_CONNECTED ? "connected" : "disconnected",
-                               _mqtt.isConnected() ? "connected" : "disconnected");
+        _prov.setProvisionState(nowWifi == WL_CONNECTED ? "connected" : "received");
         lastWifi = nowWifi;
         if (_logger && _debugTagEnabled("DEVICE")) {
             _logf("DEBUG", "DEVICE", "Status WiFi=%s MQTT=%s",
@@ -170,9 +206,11 @@ void MeoDevice::loop() {
     }
 
     // Lazy reconnect when WiFi + creds available
-    if (!_mqtt.isConnected() && _wifiReady && hasCredentials()) {
+    if (!_mqtt.isConnected() && _wifiReady && hasCredentials() && millis() >= _nextMqttRetryAtMs) {
         _log("WARN", "DEVICE", "MQTT disconnected; attempting reconnect");
-        _connectMqttAndDeclare();
+        if (!_connectMqttAndDeclare()) {
+            _nextMqttRetryAtMs = millis() + 5000;
+        }
     }
 }
 
@@ -182,7 +220,6 @@ bool MeoDevice::publishEvent(const char* eventName,
                              uint8_t count) {
     if (!_mqtt.isConnected()) return false;
     std::string base = "meo/";
-    if (_userId.length()) base += _userId + "/";
     std::string topic = base + _deviceId + "/event";
 
     StaticJsonDocument<512> doc;
@@ -203,7 +240,6 @@ bool MeoDevice::publishEvent(const char* eventName,
 bool MeoDevice::publishEvent(const char* eventName, const MeoEventPayload& payload) {
     if (!_mqtt.isConnected()) return false;
     std::string base = "meo/";
-    if (_userId.length()) base += _userId + "/";
     std::string topic = base + _deviceId + "/event/" + eventName;
 
     StaticJsonDocument<512> doc;
@@ -221,12 +257,35 @@ bool MeoDevice::publishEvent(const char* eventName, const MeoEventPayload& paylo
     return _mqtt.publish(topic.c_str(), (const uint8_t*)buf, len, false);
 }
 
+bool MeoDevice::sendEvent(const char* eventName) {
+    MeoEventPayload payload;
+    return publishEvent(eventName, payload);
+}
+
+bool MeoDevice::sendReading(const char* name, int value) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d", value);
+    return sendReading(name, buf);
+}
+
+bool MeoDevice::sendReading(const char* name, float value) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%.2f", value);
+    return sendReading(name, buf);
+}
+
+bool MeoDevice::sendReading(const char* name, const char* value) {
+    if (!name || !*name) return false;
+    MeoEventPayload payload;
+    payload["value"] = value ? value : "";
+    return publishEvent(name, payload);
+}
+
 bool MeoDevice::sendFeatureResponse(const char* featureName,
                                     bool success,
                                     const char* message) {
     if (!_mqtt.isConnected()) return false;
     std::string base = "meo/";
-    if (_userId.length()) base += _userId + "/";
     std::string topic = base + _deviceId + "/event/feature_response";
 
     StaticJsonDocument<512> doc;
@@ -252,9 +311,7 @@ bool MeoDevice::sendFeatureResponse(const MeoFeatureCall& call,
 }
 
 void MeoDevice::_updateBleStatus() {
-    const char* wifi = (WiFi.status() == WL_CONNECTED) ? "connected" : "disconnected";
-    const char* mqtt = _mqtt.isConnected() ? "connected" : "disconnected";
-    _prov.setRuntimeStatus(wifi, mqtt);
+    _prov.setProvisionState(WiFi.status() == WL_CONNECTED ? "connected" : "received");
 }
 
 bool MeoDevice::_connectMqttAndDeclare() {
@@ -267,7 +324,6 @@ bool MeoDevice::_connectMqttAndDeclare() {
     // LWT: status offline retained
     {
         std::string base = "meo/";
-        if (_userId.length()) base += _userId + "/";
         std::string willTopic = base + _deviceId + "/status";
         _mqtt.setWill(willTopic.c_str(), "offline", 0, false);
     }
@@ -281,17 +337,7 @@ bool MeoDevice::_connectMqttAndDeclare() {
     // Subscribe to feature invokes and wire handler
     {
         std::string base = "meo/";
-        if (_userId.length()) base += _userId + "/";
-        std::string topic;
-        if (_cloudCompatible) {
-            // cloud-compatible: single topic where payload contains feature name
-            // topic = base + _deviceId + "/feature"; debug
-            topic = base + _deviceId + "/feature/+/invoke";
-
-        } else {
-            // edge-compatible: topic encodes feature name in topic path
-            topic = base + _deviceId + "/feature/+/invoke";
-        }
+        std::string topic = base + _deviceId + "/feature/+/invoke";
         _mqtt.subscribe(topic.c_str());
         _mqtt.setMessageHandler(&_mqttThunk, this);
         if (_logger && _debugTagEnabled("DEVICE")) {
@@ -302,7 +348,6 @@ bool MeoDevice::_connectMqttAndDeclare() {
     // Publish online status
     {
         std::string base = "meo/";
-        if (_userId.length()) base += _userId + "/";
         std::string statusTopic = base + _deviceId + "/status";
         _mqtt.publish(statusTopic.c_str(), "online", true);
     }
@@ -311,6 +356,7 @@ bool MeoDevice::_connectMqttAndDeclare() {
     _publishDeclare();
 
     _updateBleStatus();
+    _nextMqttRetryAtMs = 0;
     return true;
 }
 
@@ -318,11 +364,12 @@ bool MeoDevice::_publishDeclare() {
     if (!_mqtt.isConnected()) return false;
 
     std::string base = "meo/";
-    if (_userId.length()) base += _userId + "/";
     std::string topic = base + _deviceId + "/declare";
     StaticJsonDocument<1024> doc;
 
     JsonObject info = doc.createNestedObject("device_info");
+    info["name"]         = _deviceName ? _deviceName : "";
+    info["profile_id"]   = _profileId ? _profileId : "";
     info["model"]        = _model ? _model : "";
     info["manufacturer"] = _manufacturer ? _manufacturer : "";
     info["connection"]   = "LAN";
@@ -347,6 +394,21 @@ bool MeoDevice::_publishDeclare() {
     return _mqtt.publish(topic.c_str(), (const uint8_t*)buf, len, false);
 }
 
+void MeoDevice::_ensureMacIdentity() {
+    if (_deviceId.length()) return;
+
+    uint8_t mac[6] = {0};
+    esp_err_t r = esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    if (r != ESP_OK) {
+        esp_read_mac(mac, ESP_MAC_ETH);
+    }
+
+    char macbuf[13];
+    snprintf(macbuf, sizeof(macbuf), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    _deviceId = macbuf;
+}
+
 // Static -> instance adapter
 void MeoDevice::_mqttThunk(const char* topic, const uint8_t* payload, unsigned int length, void* ctx) {
     MeoDevice* self = reinterpret_cast<MeoDevice*>(ctx);
@@ -356,8 +418,8 @@ void MeoDevice::_mqttThunk(const char* topic, const uint8_t* payload, unsigned i
 
 void MeoDevice::_dispatchInvoke(const char* topic, const uint8_t* payload, unsigned int length) {
     // Two supported invoke forms:
-    // 1) Topic-encoded: meo/{...}/{device_id}/feature/{featureName}/invoke
-    // 2) Payload-encoded (cloud-compatible): meo/{...}/{device_id}/feature with JSON { "feature"|"feature_name": "name", "params": {...} }
+    // 1) Topic-encoded: meo/{deviceId}/feature/{featureName}/invoke
+    // 2) Payload-encoded: meo/{deviceId}/feature with JSON { "feature"|"feature_name": "name", "params": {...} }
 
     char featureName[64] = {0};
     bool featureFromTopic = false;
@@ -380,7 +442,7 @@ void MeoDevice::_dispatchInvoke(const char* topic, const uint8_t* payload, unsig
     bool jsonOk = (err == DeserializationError::Ok);
     if (!jsonOk && !featureFromTopic) return; // if no JSON and feature not in topic, nothing to do
 
-    // If payload provides feature name (cloud-compatible form), accept keys "feature" or "feature_name"
+    // If payload provides feature name, accept keys "feature" or "feature_name"
     if (!featureFromTopic && jsonOk) {
         if (doc.containsKey("feature") && doc["feature"].is<const char*>()) {
             strncpy(featureName, doc["feature"].as<const char*>(), sizeof(featureName)-1);
@@ -411,15 +473,24 @@ void MeoDevice::_dispatchInvoke(const char* topic, const uint8_t* payload, unsig
         }
     }
 
-    // Dispatch to registered handler
+    // Dispatch to advanced handlers first.
     for (uint8_t i = 0; i < _methodCount; ++i) {
-        if (strcmp(featureName, _methodNames[i]) == 0) {
+        if (_methodHandlers[i] && strcmp(featureName, _methodNames[i]) == 0) {
             if (_logger && _debugTagEnabled("DEVICE")) {
                 _logf("DEBUG", "DEVICE", "Invoke %s with %u params", featureName, (unsigned)call.params.size());
             }
-            if (_methodHandlers[i]) {
-                _methodHandlers[i](call);
+            _methodHandlers[i](call);
+            return;
+        }
+    }
+
+    // Then dispatch beginner no-argument commands.
+    for (uint8_t i = 0; i < _simpleCommandCount; ++i) {
+        if (_simpleCommandHandlers[i] && strcmp(featureName, _simpleCommandNames[i]) == 0) {
+            if (_logger && _debugTagEnabled("DEVICE")) {
+                _logf("DEBUG", "DEVICE", "Invoke simple command %s", featureName);
             }
+            _simpleCommandHandlers[i]();
             return;
         }
     }

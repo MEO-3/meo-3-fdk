@@ -7,28 +7,12 @@
 #include "../ble/Meo3_Ble.h"
 #include "../Meo3_Type.h" // MeoLogFunction
 
-// Provisioning service UUID (stable across all devices)
-#define MEO_BLE_PROV_SERV_UUID      "9f27f7f0-0000-1000-8000-00805f9b34fb" // Service UUID
-
-// Characteristic UUIDs for provisioning
-#define CH_UUID_WIFI_SSID           "9f27f7f1-0000-1000-8000-00805f9b34fb" // RW - WiFi SSID
-#define CH_UUID_WIFI_PASS           "9f27f7f2-0000-1000-8000-00805f9b34fb" // WO - WiFi Password
-#define CH_UUID_WIFI_LIST           "9f27f7f3-0000-1000-8000-00805f9b34fb" // RO - WiFi SSID List (read-only)
-
-#define CH_UUID_USER_ID             "9f27f7f4-0000-1000-8000-00805f9b34fb" // RW - User ID
-
-// Device info characteristics (use cloud compatible)
-#define CH_UUID_PRODUCT_ID          "9f27f7f5-0000-1000-8000-00805f9b34fb" // RO - Product ID / Manufacturer
-#define CH_UUID_BUILD_INFO          "9f27f7f6-0000-1000-8000-00805f9b34fb" // RO - Build Number / Firmware Version
-#define CH_UUID_MAC_ADDR            "9f27f7f7-0000-1000-8000-00805f9b34fb" // RO - MAC Address
-
-// Device info characteristics (use edge compatible)
-#define CH_UUID_DEV_MODEL           "9f27f7f8-0000-1000-8000-00805f9b34fb" // RO - Device Model
-#define CH_UUID_DEV_MANUF           "9f27f7f9-0000-1000-8000-00805f9b34fb" // RO - Device Manufacturer
-
-// Additional provisioning characteristics used by the implementation
-#define CH_UUID_TX_KEY              "9f27f7fa-0000-1000-8000-00805f9b34fb" // WO - Transmit Key (MQTT password)
-#define CH_UUID_DEV_ID              "9f27f7fb-0000-1000-8000-00805f9b34fb" // RW - Device ID (defaults to MAC-based ID if not set)
+// MEO open-service provisioning contract.
+#define MEO_BLE_PROV_SERV_UUID      "7f5a0000-0f23-4b6a-9f5e-3c2a9f7e0100"
+#define CH_UUID_DEVICE_MAC          "7f5a0001-0f23-4b6a-9f5e-3c2a9f7e0100"
+#define CH_UUID_WIFI_CONFIG         "7f5a0002-0f23-4b6a-9f5e-3c2a9f7e0100"
+#define CH_UUID_PROVISION_STATUS    "7f5a0003-0f23-4b6a-9f5e-3c2a9f7e0100"
+#define CH_UUID_PROFILE_ID          "7f5a0004-0f23-4b6a-9f5e-3c2a9f7e0100"
 
 class MeoBleProvision {
 public:
@@ -38,10 +22,7 @@ public:
     void setLogger(MeoLogFunction logger);
     void setDebugTags(const char* tagsCsv); // enables DEBUG for "PROV" when tag present
 
-    // Initialize with BLE and storage; model/manuf taken from device config (recommended)
-    bool begin(MeoBle* ble, MeoStorage* storage, const char* devModel, const char* devManufacturer);
-
-    void setCloudCompatibleInfo(const char* productId, const char* buildInfo);
+    bool begin(MeoBle* ble, MeoStorage* storage, const char* deviceName, const char* profileId);
 
     // Start/stop advertising through base BLE
     void startAdvertising();
@@ -50,45 +31,28 @@ public:
     // Call regularly to refresh status and handle optional scheduled reboot
     void loop();
 
-    // Update runtime status (short strings: "connected"/"disconnected"/"unknown")
-    void setRuntimeStatus(const char* wifi, const char* mqtt);
-
-    // Enable auto reboot when both SSID and PASS are written via BLE
-    void setAutoRebootOnProvision(bool enable, uint32_t delayMs = 300);
+    void setProfileId(const char* profileId);
+    void setProvisionState(const char* state);
 
 private:
     MeoBle*            _ble      = nullptr;
     MeoStorage*        _storage  = nullptr;
 
-    std::string        _devModel;
-    std::string        _devManuf;
-    std::string        _devProductIdStr;
-    std::string        _buildInfoStr;
-    std::string        _wifiSsidStr;
+    std::string        _deviceName;
+    std::string        _profileId;
+    std::string        _macAddress;
+    std::string        _pendingSsid;
+    std::string        _pendingPassword;
 
     NimBLEService*         _svc      = nullptr;
-    NimBLECharacteristic*  _chSsid   = nullptr;
-    NimBLECharacteristic*  _chPass   = nullptr;
-    NimBLECharacteristic*  _chWifiList = nullptr;
-    NimBLECharacteristic*  _chModel     = nullptr;
-    NimBLECharacteristic*  _chManuf     = nullptr;
-    NimBLECharacteristic*  _chProductId = nullptr;
-    NimBLECharacteristic*  _chBuildInfo = nullptr;
-    NimBLECharacteristic*  _chMacAddr   = nullptr;
-    NimBLECharacteristic*  _chUserId    = nullptr;
-    NimBLECharacteristic*  _chTxKey     = nullptr;
-    NimBLECharacteristic*  _chDevId     = nullptr;
+    NimBLECharacteristic*  _chMac = nullptr;
+    NimBLECharacteristic*  _chWifiConfig = nullptr;
+    NimBLECharacteristic*  _chStatus = nullptr;
+    NimBLECharacteristic*  _chProfileId = nullptr;
 
-    const char*         _wifiStatus;
-    const char*         _mqttStatus;
-    char                _statusBuf[128];
-
-    bool                _autoReboot = true;
-    uint32_t            _rebootDelayMs = 300;
-    bool                _ssidWritten = false;
-    bool                _passWritten = false;
-    bool                _rebootScheduled = false;
-    uint32_t            _rebootAtMs = 0;
+    char                _statusBuf[96] = {0};
+    bool                _wifiConfigPending = false;
+    bool                _wifiConnectRunning = false;
 
     // Logging
     MeoLogFunction _logger = nullptr;
@@ -98,8 +62,9 @@ private:
     bool _createServiceAndCharacteristics();
     void _bindWriteHandlers();
     void _loadInitialValues();
-    void _updateStatus();
-    void _scheduleRebootIfReady();
+    void _connectPendingWifi();
+    void _setStatusJson(const char* state, const char* message = nullptr);
+    std::string _readMacAddress() const;
     bool _debugTagEnabled(const char* tag) const;
 
     // Write callbacks

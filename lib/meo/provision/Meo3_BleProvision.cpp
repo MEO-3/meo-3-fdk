@@ -1,131 +1,137 @@
 #include "Meo3_BleProvision.h"
 #include "Meo3_Logger.h"
-#include <stdarg.h>
+#include <ArduinoJson.h>
+#include <WiFi.h>
 #include <esp_system.h>
+#include <stdarg.h>
 #include <string>
-#include <cctype>
 
 void MeoBleProvision::setLogger(MeoLogFunction logger) {
     _logger = logger;
 }
+
 void MeoBleProvision::setDebugTags(const char* tagsCsv) {
     if (!tagsCsv) { _debugTags[0] = '\0'; return; }
     strncpy(_debugTags, tagsCsv, sizeof(_debugTags) - 1);
     _debugTags[sizeof(_debugTags) - 1] = '\0';
 }
 
-bool MeoBleProvision::begin(MeoBle* ble, MeoStorage* storage, const char* devModel, const char* devManufacturer) {
+bool MeoBleProvision::begin(MeoBle* ble, MeoStorage* storage, const char* deviceName, const char* profileId) {
     _ble = ble;
     _storage = storage;
-    _devModel = devModel;
-    _devManuf = devManufacturer;
+    _deviceName = deviceName && deviceName[0] ? deviceName : "MEO Device";
+    _profileId = profileId && profileId[0] ? profileId : "meo-profile-generic-v1";
+
     if (!_ble || !_storage || !_storage->begin()) return false;
+    _macAddress = _readMacAddress();
     if (!_createServiceAndCharacteristics()) return false;
     _bindWriteHandlers();
     _svc->start();
     _loadInitialValues();
+    _setStatusJson(WiFi.status() == WL_CONNECTED ? "connected" : "received");
     return true;
 }
 
-void MeoBleProvision::setCloudCompatibleInfo(const char* productId, const char* buildInfo) {
-    _devProductIdStr = productId ? productId : "";
-    _buildInfoStr    = buildInfo ? buildInfo : "";
-    MeoLogf("DEBUG", "PROV", "Cloud compatible info set: productId=%s buildInfo=%s", _devProductIdStr.c_str(), _buildInfoStr.c_str());
-    // If characteristics already created, update their values so central reads full strings
-    if (_chProductId && !_devProductIdStr.empty()) _chProductId->setValue(_devProductIdStr);
-    if (_chBuildInfo && !_buildInfoStr.empty())    _chBuildInfo->setValue(_buildInfoStr);
+void MeoBleProvision::setProfileId(const char* profileId) {
+    _profileId = profileId && profileId[0] ? profileId : "meo-profile-generic-v1";
+    if (_chProfileId) _chProfileId->setValue(_profileId);
+}
+
+void MeoBleProvision::setProvisionState(const char* state) {
+    _setStatusJson(state ? state : "received");
 }
 
 bool MeoBleProvision::_createServiceAndCharacteristics() {
     _svc = _ble->createService(MEO_BLE_PROV_SERV_UUID);
     if (!_svc) return false;
 
-    // Per your spec: SSID RW, PASS WO, Model/Manuf RO, DevID RW, TxKey WO, Prog R+Notify
-    _chSsid      = _ble->createCharacteristic(_svc, CH_UUID_WIFI_SSID,  NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
-    _chPass      = _ble->createCharacteristic(_svc, CH_UUID_WIFI_PASS,  NIMBLE_PROPERTY::WRITE);
-    _chWifiList  = _ble->createCharacteristic(_svc, CH_UUID_WIFI_LIST,  NIMBLE_PROPERTY::READ);
-    _chUserId    = _ble->createCharacteristic(_svc, CH_UUID_USER_ID,    NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
-    _chProductId = _ble->createCharacteristic(_svc, CH_UUID_PRODUCT_ID, NIMBLE_PROPERTY::READ);
-    _chBuildInfo = _ble->createCharacteristic(_svc, CH_UUID_BUILD_INFO, NIMBLE_PROPERTY::READ);
-    _chMacAddr   = _ble->createCharacteristic(_svc, CH_UUID_MAC_ADDR,   NIMBLE_PROPERTY::READ);
-    _chModel     = _ble->createCharacteristic(_svc, CH_UUID_DEV_MODEL,  NIMBLE_PROPERTY::READ);
-    _chManuf     = _ble->createCharacteristic(_svc, CH_UUID_DEV_MANUF,  NIMBLE_PROPERTY::READ);
-    _chTxKey     = _ble->createCharacteristic(_svc, CH_UUID_TX_KEY,     NIMBLE_PROPERTY::WRITE);
-    _chDevId     = _ble->createCharacteristic(_svc, CH_UUID_DEV_ID,     NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+    _chMac = _ble->createCharacteristic(_svc, CH_UUID_DEVICE_MAC, NIMBLE_PROPERTY::READ);
+    _chWifiConfig = _ble->createCharacteristic(_svc, CH_UUID_WIFI_CONFIG, NIMBLE_PROPERTY::WRITE);
+    _chStatus = _ble->createCharacteristic(_svc, CH_UUID_PROVISION_STATUS, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+    _chProfileId = _ble->createCharacteristic(_svc, CH_UUID_PROFILE_ID, NIMBLE_PROPERTY::READ);
 
-    return _chSsid && _chPass && _chWifiList && _chModel && _chManuf && _chProductId && _chBuildInfo && _chMacAddr && _chUserId && _chTxKey;
+    return _chMac && _chWifiConfig && _chStatus && _chProfileId;
 }
 
 void MeoBleProvision::_bindWriteHandlers() {
-    _ble->setCharWriteHandler(_chSsid,  &MeoBleProvision::_onWriteStatic, this);
-    _ble->setCharWriteHandler(_chPass,  &MeoBleProvision::_onWriteStatic, this);
-    _ble->setCharWriteHandler(_chUserId, &MeoBleProvision::_onWriteStatic, this);
-    _ble->setCharWriteHandler(_chTxKey, &MeoBleProvision::_onWriteStatic, this);
-    _ble->setCharWriteHandler(_chDevId, &MeoBleProvision::_onWriteStatic, this);
+    _ble->setCharWriteHandler(_chWifiConfig, &MeoBleProvision::_onWriteStatic, this);
 }
 
-void MeoBleProvision::startAdvertising() { if (_ble) _ble->startAdvertising(); }
-void MeoBleProvision::stopAdvertising()  { if (_ble) _ble->stopAdvertising();  }
+void MeoBleProvision::startAdvertising() {
+    if (_ble) _ble->startAdvertising();
+}
+
+void MeoBleProvision::stopAdvertising() {
+    if (_ble) _ble->stopAdvertising();
+}
 
 void MeoBleProvision::loop() {
-    // Execute scheduled reboot
-    if (_autoReboot && _rebootScheduled && millis() >= _rebootAtMs) {
-        MeoLog("INFO", "PROV", "Reboot now");
-        delay(100);
-        ESP.restart();
+    if (_wifiConfigPending && !_wifiConnectRunning) {
+        _connectPendingWifi();
     }
-}
-
-void MeoBleProvision::setRuntimeStatus(const char* wifi, const char* mqtt) {
-    _wifiStatus = wifi ? wifi : _wifiStatus;
-    _mqttStatus = mqtt ? mqtt : _mqttStatus;
-}
-
-void MeoBleProvision::setAutoRebootOnProvision(bool enable, uint32_t delayMs) {
-    _autoReboot = enable;
-    _rebootDelayMs = delayMs;
 }
 
 void MeoBleProvision::_loadInitialValues() {
-    std::string tmp;
-    if (_storage->loadString("wifi_ssid", tmp)) {
-        _wifiSsidStr = tmp;
-        if (_chSsid) _chSsid->setValue(_wifiSsidStr);
-    }
-    if (_storage->loadString("user_id", tmp))   _chUserId->setValue(tmp);
-    if (_storage->loadString("device_id", tmp)) _chDevId->setValue(tmp);
-    // MAC address: use the device's Ethernet MAC (ESP MAC), not BLE
-    if (_chMacAddr) {
-        uint8_t mac_raw[6] = {0};
-        esp_err_t r = esp_read_mac(mac_raw, ESP_MAC_ETH);
-        _chMacAddr->setValue(mac_raw, 6);
+    if (_chMac) _chMac->setValue(_macAddress);
+    if (_chProfileId) _chProfileId->setValue(_profileId);
+}
+
+void MeoBleProvision::_connectPendingWifi() {
+    _wifiConfigPending = false;
+    _wifiConnectRunning = true;
+
+    _setStatusJson("connecting");
+    MeoLogf("INFO", "PROV", "Connecting Wi-Fi SSID=%s", _pendingSsid.c_str());
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(_pendingSsid.c_str(), _pendingPassword.c_str());
+
+    uint32_t startedAt = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startedAt < 15000) {
+        delay(100);
     }
 
-    if (_chModel) {
-        _chModel->setValue(_devModel);
-        MeoLogf("DEBUG", "PROV", "model=%s", _devModel.c_str());
+    if (WiFi.status() == WL_CONNECTED) {
+        _setStatusJson("connected");
+        MeoLog("INFO", "PROV", "Wi-Fi connected");
+        stopAdvertising();
+    } else {
+        _setStatusJson("failed", "Wi-Fi connection failed");
+        MeoLog("ERROR", "PROV", "Wi-Fi connection failed");
+        startAdvertising();
     }
-    if (_chManuf) {
-        _chManuf->setValue(_devManuf);
-        MeoLogf("DEBUG", "PROV", "manuf=%s", _devManuf.c_str());
+
+    _wifiConnectRunning = false;
+}
+
+void MeoBleProvision::_setStatusJson(const char* state, const char* message) {
+    StaticJsonDocument<160> doc;
+    doc["state"] = state && state[0] ? state : "received";
+    if (message && message[0]) doc["message"] = message;
+
+    size_t len = serializeJson(doc, _statusBuf, sizeof(_statusBuf));
+    if (len == 0) {
+        strncpy(_statusBuf, "{\"state\":\"failed\"}", sizeof(_statusBuf) - 1);
+        _statusBuf[sizeof(_statusBuf) - 1] = '\0';
     }
-    if (_chProductId) {
-        _chProductId->setValue(_devProductIdStr);
-        MeoLogf("DEBUG", "PROV", "productId=%s", _devProductIdStr.c_str());
-    }
-    if (_chBuildInfo) {
-        _chBuildInfo->setValue(_buildInfoStr);
-        MeoLogf("DEBUG", "PROV", "buildInfo=%s", _buildInfoStr.c_str());
+
+    if (_chStatus) {
+        _chStatus->setValue((uint8_t*)_statusBuf, strlen(_statusBuf));
+        _chStatus->notify();
     }
 }
 
-void MeoBleProvision::_scheduleRebootIfReady() {
-    if (!_autoReboot) return;
-    if (_ssidWritten && _passWritten && !_rebootScheduled) {
-        _rebootScheduled = true;
-        _rebootAtMs = millis() + _rebootDelayMs;
-        _logger("INFO", "Provisioning complete; scheduling reboot");
+std::string MeoBleProvision::_readMacAddress() const {
+    uint8_t mac[6] = {0};
+    esp_err_t r = esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    if (r != ESP_OK) {
+        r = esp_read_mac(mac, ESP_MAC_ETH);
     }
+
+    char buf[18];
+    snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return std::string(buf);
 }
 
 void MeoBleProvision::_onWriteStatic(NimBLECharacteristic* ch, void* ctx) {
@@ -133,43 +139,37 @@ void MeoBleProvision::_onWriteStatic(NimBLECharacteristic* ch, void* ctx) {
 }
 
 void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
-    const NimBLEUUID& uuid = ch->getUUID();
-    std::string s = ch->getValue();
-    // trim whitespace (including CR/LF) in-place
-    while (!s.empty() && std::isspace((unsigned char)s.back())) s.pop_back();
-    size_t start = 0; while (start < s.size() && std::isspace((unsigned char)s[start])) ++start;
-    if (start > 0) s.erase(0, start);
+    if (!ch || !ch->getUUID().equals(NimBLEUUID(CH_UUID_WIFI_CONFIG))) return;
 
-    if (uuid.equals(NimBLEUUID(CH_UUID_WIFI_SSID))) {
-        _storage->saveString("wifi_ssid", s);
-        _wifiSsidStr = s;
-        _ssidWritten = true;
-        _logger("INFO", "SSID updated");
-        _scheduleRebootIfReady();
+    std::string payload = ch->getValue();
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, payload.c_str(), payload.size());
+    if (err) {
+        _setStatusJson("failed", "Invalid Wi-Fi config JSON");
+        MeoLog("ERROR", "PROV", "Invalid Wi-Fi config JSON");
         return;
     }
-    if (uuid.equals(NimBLEUUID(CH_UUID_WIFI_PASS))) {
-        _storage->saveString("wifi_pass", s);
-        _passWritten = true;
-        _logger("INFO", "PASS updated");
-        _scheduleRebootIfReady();
+
+    const char* ssid = doc["ssid"] | "";
+    const char* password = doc["password"] | "";
+    if (!ssid || !ssid[0]) {
+        _setStatusJson("failed", "Wi-Fi SSID is required");
+        MeoLog("ERROR", "PROV", "Wi-Fi SSID is required");
         return;
     }
-    if (uuid.equals(NimBLEUUID(CH_UUID_USER_ID))) {
-        _storage->saveString("user_id", s);
-        _logger("INFO", "User ID updated");
+
+    _pendingSsid = ssid;
+    _pendingPassword = password ? password : "";
+    if (!_storage->saveString("wifi_ssid", _pendingSsid) ||
+        !_storage->saveString("wifi_pass", _pendingPassword)) {
+        _setStatusJson("failed", "Could not save Wi-Fi config");
+        MeoLog("ERROR", "PROV", "Could not save Wi-Fi config");
         return;
     }
-    if (uuid.equals(NimBLEUUID(CH_UUID_TX_KEY))) {
-        _storage->saveString("tx_key", s);
-        _logger("INFO", "Transmit Key updated");
-        return;
-    }
-    if (uuid.equals(NimBLEUUID(CH_UUID_DEV_ID))) {
-        _storage->saveString("device_id", s);
-        _logger("INFO", "Device ID updated");
-        return;
-    }
+
+    _setStatusJson("received");
+    _wifiConfigPending = true;
+    MeoLog("INFO", "PROV", "Wi-Fi config received");
 }
 
 bool MeoBleProvision::_debugTagEnabled(const char* tag) const {

@@ -1,8 +1,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <cstdarg>
 #include <string>
 
-void MeoLog(const char* level, const char* tag, const char* msg) {
+inline void MeoLog(const char* level, const char* tag, const char* msg) {
     char buf[256];
     snprintf(buf, sizeof(buf), "[%s] %s", tag ? tag : "DEVICE", msg ? msg : "");
     Serial.print("[");
@@ -11,7 +12,7 @@ void MeoLog(const char* level, const char* tag, const char* msg) {
     Serial.println(buf);
 }
 
-void MeoLogf(const char* level, const char* tag, const char* fmt, ...) {
+inline void MeoLogf(const char* level, const char* tag, const char* fmt, ...) {
     char msg[192];
     va_list ap;
     va_start(ap, fmt);
