@@ -4,16 +4,16 @@
 #include <esp_system.h>
 
 MeoDevice::MeoDevice()
-    : _deviceName("MEO Device"),
-      _model("MEO Device"),
+    : _model("MEO Device"),
       _manufacturer("ThingAI"),
+      _fwVersion("0.0.0"),
       _wifiSsid(nullptr),
       _wifiPass(nullptr) {}
 
-MeoDevice::MeoDevice(const char* deviceName)
-    : _deviceName(deviceName && deviceName[0] ? deviceName : "MEO Device"),
-      _model(_deviceName),
+MeoDevice::MeoDevice(const char* model)
+    : _model(model && model[0] ? model : "MEO Device"),
       _manufacturer("ThingAI"),
+      _fwVersion("0.0.0"),
       _wifiSsid(nullptr),
       _wifiPass(nullptr) {}
 
@@ -30,9 +30,45 @@ void MeoDevice::setDebugTags(const char* tagsCsv) {
 }
 
 void MeoDevice::setDeviceInfo(const char* model, const char* manufacturer) {
-    _model = model;
-    if (model && model[0]) _deviceName = model;
+    if (model && model[0]) _model = model;
     _manufacturer = manufacturer;
+}
+
+void MeoDevice::setFirmwareVersion(const char* version) {
+    if (version && version[0]) _fwVersion = version;
+}
+
+void MeoDevice::addCapability(uint16_t capabilityId) {
+    if (_capabilityCount >= MEO_MAX_CAPABILITIES) {
+        _logf("WARN", "DEVICE", "Capability list full; ignoring 0x%04X", capabilityId);
+        return;
+    }
+    for (uint8_t i = 0; i < _capabilityCount; ++i) {
+        if (_capabilities[i] == capabilityId) return;  // already declared
+    }
+    _capabilities[_capabilityCount++] = capabilityId;
+}
+
+size_t MeoDevice::buildCapabilityPayload(char* out, size_t cap) const {
+    if (!out || cap == 0) return 0;
+
+    int n = snprintf(out, cap,
+                     "{\"model\":\"%s\",\"fw\":\"%s\",\"capabilities\":[",
+                     _model ? _model : "",
+                     _fwVersion ? _fwVersion : "");
+    if (n < 0 || (size_t)n >= cap) return 0;
+    size_t len = (size_t)n;
+
+    for (uint8_t i = 0; i < _capabilityCount; ++i) {
+        int m = snprintf(out + len, cap - len, "%s%u",
+                         i == 0 ? "" : ",", _capabilities[i]);
+        if (m < 0 || len + (size_t)m >= cap) return 0;
+        len += (size_t)m;
+    }
+
+    int t = snprintf(out + len, cap - len, "]}");
+    if (t < 0 || len + (size_t)t >= cap) return 0;
+    return len + (size_t)t;
 }
 
 void MeoDevice::beginWifi(const char* ssid, const char* pass) {
@@ -56,7 +92,7 @@ bool MeoDevice::begin() {
     }
 
     std::string setupName = "MEO-Setup-";
-    setupName += _deviceName ? _deviceName : "Device";
+    setupName += _model ? _model : "Device";
     if (!_ble.begin(setupName.c_str())) {
         _log("ERROR", "DEVICE", "BLE init failed");
         return false;
@@ -64,7 +100,12 @@ bool MeoDevice::begin() {
 
     _prov.setLogger(_logger);
     _prov.setDebugTags(_debugTags);
-    if (!_prov.begin(&_ble, &_storage, _deviceName)) {
+
+    char capPayload[384];
+    if (buildCapabilityPayload(capPayload, sizeof(capPayload)) == 0) capPayload[0] = '\0';
+    _prov.setCapabilities(capPayload);
+
+    if (!_prov.begin(&_ble, &_storage, _model)) {
         _log("ERROR", "DEVICE", "BLE provisioning init failed");
         return false;
     }

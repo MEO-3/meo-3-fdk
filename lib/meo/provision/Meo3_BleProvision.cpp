@@ -35,6 +35,10 @@ void MeoBleProvision::setProvisionState(const char* state) {
     _setStatusJson(state ? state : "received");
 }
 
+void MeoBleProvision::setCapabilities(const char* payload) {
+    _capabilities = payload ? payload : "";
+}
+
 bool MeoBleProvision::_createServiceAndCharacteristics() {
     _svc = _ble->createService(MEO_BLE_PROV_SERV_UUID);
     if (!_svc) return false;
@@ -42,8 +46,9 @@ bool MeoBleProvision::_createServiceAndCharacteristics() {
     _chMac = _ble->createCharacteristic(_svc, CH_UUID_DEVICE_MAC, NIMBLE_PROPERTY::READ);
     _chWifiConfig = _ble->createCharacteristic(_svc, CH_UUID_WIFI_CONFIG, NIMBLE_PROPERTY::WRITE);
     _chStatus = _ble->createCharacteristic(_svc, CH_UUID_PROVISION_STATUS, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+    _chCapabilities = _ble->createCharacteristic(_svc, CH_UUID_DEVICE_CAPABILITIES, NIMBLE_PROPERTY::READ);
 
-    return _chMac && _chWifiConfig && _chStatus;
+    return _chMac && _chWifiConfig && _chStatus && _chCapabilities;
 }
 
 void MeoBleProvision::_bindWriteHandlers() {
@@ -66,6 +71,7 @@ void MeoBleProvision::loop() {
 
 void MeoBleProvision::_loadInitialValues() {
     if (_chMac) _chMac->setValue(_macAddress);
+    if (_chCapabilities) _chCapabilities->setValue(_capabilities);
 }
 
 void MeoBleProvision::_connectPendingWifi() {

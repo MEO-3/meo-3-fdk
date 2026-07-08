@@ -12,15 +12,33 @@
 class MeoDevice {
 public:
     MeoDevice();
-    MeoDevice(const char* deviceName);
+    MeoDevice(const char* model);
 
     // Logging
     void setLogger(MeoLogFunction logger);
     // CSV of tags to enable DEBUG logs for (e.g. "DEVICE,PROV")
     void setDebugTags(const char* tagsCsv);
 
-    // Device metadata exposed via BLE provisioning characteristics
+    // Device model and manufacturer. The model is reported to the gateway in
+    // the capability report; the human-facing device name lives on the gateway,
+    // not on firmware.
     void setDeviceInfo(const char* model, const char* manufacturer);
+
+    // Firmware version reported in the capability report (default "0.0.0")
+    void setFirmwareVersion(const char* version);
+
+    // Declare a capability this device supports, using a MEO_* constant from
+    // define/Meo3_Cmd.h. The capability set is fixed per boot: call once per
+    // capability in setup(), before begin(). Duplicates and any past
+    // MEO_MAX_CAPABILITIES are ignored. The declared set is exposed to the
+    // gateway over the BLE provisioning capability characteristic.
+    void addCapability(uint16_t capabilityId);
+
+    // Serialize the capability report served over the BLE provisioning
+    // capability characteristic (see firmware_development_guide.md "Capability
+    // Reporting") into out. Returns bytes written excluding the NUL terminator,
+    // or 0 if out is too small.
+    size_t buildCapabilityPayload(char* out, size_t cap) const;
 
     // Override Wi-Fi upfront (development / bypass provisioning)
     void beginWifi(const char* ssid, const char* pass);
@@ -34,14 +52,19 @@ public:
     bool isWifiConnected() const { return _wifiReady; }
 
 private:
-    const char* _deviceName;
     const char* _model;
     const char* _manufacturer;
+    const char* _fwVersion;
 
     const char* _wifiSsid;
     const char* _wifiPass;
 
     std::string _deviceId;   // Wi-Fi MAC — stable device identity
+
+    // Declared capability set (fixed per boot), serialized into the capability report
+    static const uint8_t MEO_MAX_CAPABILITIES = 32;
+    uint16_t _capabilities[MEO_MAX_CAPABILITIES];
+    uint8_t  _capabilityCount = 0;
 
     MeoStorage      _storage;
     MeoBle          _ble;

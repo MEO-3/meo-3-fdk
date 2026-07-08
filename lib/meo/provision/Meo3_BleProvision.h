@@ -12,6 +12,7 @@
 #define CH_UUID_DEVICE_MAC          "7f5a0001-0f23-4b6a-9f5e-3c2a9f7e0100"
 #define CH_UUID_WIFI_CONFIG         "7f5a0002-0f23-4b6a-9f5e-3c2a9f7e0100"
 #define CH_UUID_PROVISION_STATUS    "7f5a0003-0f23-4b6a-9f5e-3c2a9f7e0100"
+#define CH_UUID_DEVICE_CAPABILITIES "7f5a0004-0f23-4b6a-9f5e-3c2a9f7e0100"
 
 class MeoBleProvision {
 public:
@@ -22,6 +23,10 @@ public:
     void setDebugTags(const char* tagsCsv); // enables DEBUG for "PROV" when tag present
 
     bool begin(MeoBle* ble, MeoStorage* storage, const char* deviceName);
+
+    // Set the capability report served over the read-only capability
+    // characteristic. Call before begin(). The string is copied.
+    void setCapabilities(const char* payload);
 
     // Start/stop advertising through base BLE
     void startAdvertising();
@@ -38,6 +43,7 @@ private:
 
     std::string        _deviceName;
     std::string        _macAddress;
+    std::string        _capabilities;
     std::string        _pendingSsid;
     std::string        _pendingPassword;
 
@@ -45,6 +51,7 @@ private:
     NimBLECharacteristic*  _chMac = nullptr;
     NimBLECharacteristic*  _chWifiConfig = nullptr;
     NimBLECharacteristic*  _chStatus = nullptr;
+    NimBLECharacteristic*  _chCapabilities = nullptr;
 
     char                _statusBuf[96] = {0};
     bool                _wifiConfigPending = false;
