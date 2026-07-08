@@ -1,6 +1,6 @@
 #include <Meo3.h>
 
-MeoDevice meo("Temperature Sensor", "meo-profile-temp-v1");
+MeoDevice meo("Temperature Sensor");
 
 void setup() {
   meo.begin();

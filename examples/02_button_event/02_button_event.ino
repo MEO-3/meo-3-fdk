@@ -2,7 +2,7 @@
 
 const int buttonPin = 4;
 
-MeoDevice meo("Classroom Button", "meo-profile-button-v1");
+MeoDevice meo("Classroom Button");
 
 void setup() {
   pinMode(buttonPin, INPUT_PULLUP);

@@ -12,7 +12,7 @@
 class MeoDevice {
 public:
     MeoDevice();
-    MeoDevice(const char* deviceName, const char* profileId);
+    MeoDevice(const char* deviceName);
 
     // Logging
     void setLogger(MeoLogFunction logger);
@@ -21,7 +21,6 @@ public:
 
     // Device metadata exposed via BLE provisioning characteristics
     void setDeviceInfo(const char* model, const char* manufacturer);
-    void setProfileId(const char* profileId);
 
     // Override Wi-Fi upfront (development / bypass provisioning)
     void beginWifi(const char* ssid, const char* pass);
@@ -36,7 +35,6 @@ public:
 
 private:
     const char* _deviceName;
-    const char* _profileId;
     const char* _model;
     const char* _manufacturer;
 

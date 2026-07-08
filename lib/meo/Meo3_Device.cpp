@@ -5,15 +5,13 @@
 
 MeoDevice::MeoDevice()
     : _deviceName("MEO Device"),
-      _profileId("meo-profile-generic-v1"),
       _model("MEO Device"),
       _manufacturer("ThingAI"),
       _wifiSsid(nullptr),
       _wifiPass(nullptr) {}
 
-MeoDevice::MeoDevice(const char* deviceName, const char* profileId)
+MeoDevice::MeoDevice(const char* deviceName)
     : _deviceName(deviceName && deviceName[0] ? deviceName : "MEO Device"),
-      _profileId(profileId && profileId[0] ? profileId : "meo-profile-generic-v1"),
       _model(_deviceName),
       _manufacturer("ThingAI"),
       _wifiSsid(nullptr),
@@ -35,11 +33,6 @@ void MeoDevice::setDeviceInfo(const char* model, const char* manufacturer) {
     _model = model;
     if (model && model[0]) _deviceName = model;
     _manufacturer = manufacturer;
-}
-
-void MeoDevice::setProfileId(const char* profileId) {
-    _profileId = profileId && profileId[0] ? profileId : "meo-profile-generic-v1";
-    _prov.setProfileId(_profileId);
 }
 
 void MeoDevice::beginWifi(const char* ssid, const char* pass) {
@@ -71,7 +64,7 @@ bool MeoDevice::begin() {
 
     _prov.setLogger(_logger);
     _prov.setDebugTags(_debugTags);
-    if (!_prov.begin(&_ble, &_storage, _deviceName, _profileId)) {
+    if (!_prov.begin(&_ble, &_storage, _deviceName)) {
         _log("ERROR", "DEVICE", "BLE provisioning init failed");
         return false;
     }

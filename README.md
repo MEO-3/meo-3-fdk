@@ -13,14 +13,14 @@ MEO 3 Arduino is a beginner-friendly SDK for K12 Arduino projects that connect t
 
 - Open the library in Arduino IDE or PlatformIO
 - Include `Meo3.h`
-- Pick a profile ID for your device
+- Give your device a friendly name
 
 ## Quick start
 
 ```cpp
 #include <Meo3.h>
 
-MeoDevice meo("Classroom Light", "meo-profile-light-v1");
+MeoDevice meo("Classroom Light");
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -43,7 +43,7 @@ void loop() {
 
 ## Beginner API
 
-- `MeoDevice(name, profileId)`
+- `MeoDevice(name)`
 - `begin()`
 - `loop()`
 - `onCommand(name, callback)`
@@ -61,7 +61,6 @@ Required BLE contract:
 - MAC read: `7f5a0001-0f23-4b6a-9f5e-3c2a9f7e0100`
 - Wi-Fi config write: `7f5a0002-0f23-4b6a-9f5e-3c2a9f7e0100`
 - Provision status: `7f5a0003-0f23-4b6a-9f5e-3c2a9f7e0100`
-- Profile ID read: `7f5a0004-0f23-4b6a-9f5e-3c2a9f7e0100`
 
 Wi-Fi is written as JSON:
 

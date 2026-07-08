@@ -16,11 +16,10 @@ void MeoBleProvision::setDebugTags(const char* tagsCsv) {
     _debugTags[sizeof(_debugTags) - 1] = '\0';
 }
 
-bool MeoBleProvision::begin(MeoBle* ble, MeoStorage* storage, const char* deviceName, const char* profileId) {
+bool MeoBleProvision::begin(MeoBle* ble, MeoStorage* storage, const char* deviceName) {
     _ble = ble;
     _storage = storage;
     _deviceName = deviceName && deviceName[0] ? deviceName : "MEO Device";
-    _profileId = profileId && profileId[0] ? profileId : "meo-profile-generic-v1";
 
     if (!_ble || !_storage || !_storage->begin()) return false;
     _macAddress = _readMacAddress();
@@ -30,11 +29,6 @@ bool MeoBleProvision::begin(MeoBle* ble, MeoStorage* storage, const char* device
     _loadInitialValues();
     _setStatusJson(WiFi.status() == WL_CONNECTED ? "connected" : "received");
     return true;
-}
-
-void MeoBleProvision::setProfileId(const char* profileId) {
-    _profileId = profileId && profileId[0] ? profileId : "meo-profile-generic-v1";
-    if (_chProfileId) _chProfileId->setValue(_profileId);
 }
 
 void MeoBleProvision::setProvisionState(const char* state) {
@@ -48,9 +42,8 @@ bool MeoBleProvision::_createServiceAndCharacteristics() {
     _chMac = _ble->createCharacteristic(_svc, CH_UUID_DEVICE_MAC, NIMBLE_PROPERTY::READ);
     _chWifiConfig = _ble->createCharacteristic(_svc, CH_UUID_WIFI_CONFIG, NIMBLE_PROPERTY::WRITE);
     _chStatus = _ble->createCharacteristic(_svc, CH_UUID_PROVISION_STATUS, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
-    _chProfileId = _ble->createCharacteristic(_svc, CH_UUID_PROFILE_ID, NIMBLE_PROPERTY::READ);
 
-    return _chMac && _chWifiConfig && _chStatus && _chProfileId;
+    return _chMac && _chWifiConfig && _chStatus;
 }
 
 void MeoBleProvision::_bindWriteHandlers() {
@@ -73,7 +66,6 @@ void MeoBleProvision::loop() {
 
 void MeoBleProvision::_loadInitialValues() {
     if (_chMac) _chMac->setValue(_macAddress);
-    if (_chProfileId) _chProfileId->setValue(_profileId);
 }
 
 void MeoBleProvision::_connectPendingWifi() {

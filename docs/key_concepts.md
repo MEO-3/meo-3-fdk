@@ -4,7 +4,7 @@ This library follows the MEO 3 open-service contract and is meant to stay simple
 
 ## Beginner model
 
-- `MeoDevice(name, profileId)` creates one device instance
+- `MeoDevice(name)` creates one device instance
 - `begin()` starts provisioning and connectivity
 - `loop()` keeps the device alive
 - `onCommand()` registers simple actions
@@ -24,7 +24,6 @@ Required characteristics:
 - Device MAC read
 - Wi-Fi config write
 - Provision status read/notify
-- Profile ID read
 
 Wi-Fi is written as JSON:
 
@@ -35,7 +34,6 @@ Wi-Fi is written as JSON:
 ## Identity
 
 - The board MAC is the default stable identity.
-- The profile ID describes the device type and learning use case.
 - Students should not need to type device IDs or MQTT credentials.
 
 ## Advanced API

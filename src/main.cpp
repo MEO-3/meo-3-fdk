@@ -5,7 +5,7 @@
 // ESP32-C3-DevKitC-02 built-in RGB is GPIO8; adjust if your board differs
 #define LED_PIN 8
 
-MeoDevice meo("MEO Test Device", "meo-profile-temp-v1");
+MeoDevice meo("MEO Test Device");
 
 // Blink LED n times at the given on/off period (ms)
 static void blinkLed(int times, int periodMs) {

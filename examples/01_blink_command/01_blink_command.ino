@@ -1,6 +1,6 @@
 #include <Meo3.h>
 
-MeoDevice meo("Classroom Light", "meo-profile-light-v1");
+MeoDevice meo("Classroom Light");
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
