@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Meo3.h>
+#include "define/Meo3_Cmd.h"
 
 // ESP32-C3-DevKitC-02 built-in RGB is GPIO8; adjust if your board differs
 #define LED_PIN 8
@@ -30,6 +31,12 @@ void setup() {
         Serial.printf("[%s] %s\n", level, message);
     });
     meo.setDebugTags("DEVICE,PROV");
+
+    // Declare capabilities before begin() so the gateway reads them off the
+    // BLE capability characteristic during provisioning (see
+    // meo-3-open-service/docs/firmware_development_guide.md "Capability Reporting").
+    meo.addCapability(MEO_READ_TEMP);
+    meo.addCapability(MEO_WRITE_MOTOR);
 
     bool ok = meo.begin();
     if (!ok) {
