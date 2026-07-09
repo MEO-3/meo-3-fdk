@@ -1,37 +1,35 @@
 # MEO 3 Arduino Library
 
-MEO 3 Arduino is a beginner-friendly SDK for K12 Arduino projects that connect to the MEO 3 open service.
+MEO 3 Arduino is an ESP32 firmware library for MEO 3 devices. It handles BLE provisioning against
+the MEO 3 open-service gateway so a device can join Wi-Fi and report what it can do, without the
+sketch touching MQTT or BLE directly.
 
 ## What it does
 
-- Starts the device with a simple Arduino API
-- Handles BLE provisioning using the MEO service contract
-- Uses the board MAC as the default device identity
-- Lets you send readings and receive commands without dealing with MQTT topics
+- Advertises BLE provisioning and walks the MEO provisioning GATT contract
+- Connects to Wi-Fi once the gateway writes credentials (or via `beginWifi()` for local development)
+- Uses the board MAC as the stable device identity — no device IDs or MQTT credentials to configure
+- Reports device model, firmware version, and declared capabilities to the gateway during provisioning
 
 ## Install
 
-- Open the library in Arduino IDE or PlatformIO
-- Include `Meo3.h`
-- Give your device a friendly name
+- Open the library in PlatformIO (or Arduino IDE)
+- `#include <Meo3.h>`
+- Give your device a name and declare its capabilities
 
 ## Quick start
 
 ```cpp
 #include <Meo3.h>
+#include "define/Meo3_Cmd.h"
 
-MeoDevice meo("Classroom Light");
+MeoDevice meo("Classroom Weather Station");
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  meo.onCommand("turn_on", []() {
-    digitalWrite(LED_BUILTIN, HIGH);
-  });
-
-  meo.onCommand("turn_off", []() {
-    digitalWrite(LED_BUILTIN, LOW);
-  });
+  // Declare capabilities before begin() — the gateway reads them off the
+  // BLE capability characteristic during provisioning.
+  meo.addCapability(MEO_READ_TEMP);
+  meo.addCapability(MEO_WRITE_MOTOR);
 
   meo.begin();
 }
@@ -41,39 +39,33 @@ void loop() {
 }
 ```
 
-## Beginner API
+## API
 
-- `MeoDevice(name)`
-- `begin()`
-- `loop()`
-- `onCommand(name, callback)`
-- `sendReading(name, value)`
-- `sendEvent(name)`
-- `isOnline()`
+- `MeoDevice()` / `MeoDevice(model)`
+- `setLogger(fn)`, `setDebugTags(csv)` — optional logging
+- `setDeviceInfo(model, manufacturer)`, `setFirmwareVersion(version)`
+- `addCapability(id)` — declare a capability from `lib/meo/define/Meo3_Cmd.h`; call before `begin()`
+- `beginWifi(ssid, pass)` — bypass BLE provisioning for local development
+- `begin()` — init storage/BLE/provisioning, connect if already provisioned
+- `loop()` — drive provisioning, detect Wi-Fi connect, stop BLE once online
+- `isProvisioned()`, `isWifiConnected()`
+
+Runtime command/reading exchange over MQTT (once the device is online) is not yet wired into
+`MeoDevice` — see `docs/key_concepts.md`.
 
 ## Provisioning
 
-The device advertises the MEO provisioning service when Wi-Fi is missing.
+The device advertises the MEO provisioning service when Wi-Fi is missing. The full GATT contract
+(characteristics, payload formats, status states) is shared with the gateway and documented once,
+in `meo-3-open-service/docs/firmware_development_guide.md` — that file is the source of truth, not
+this README.
 
-Required BLE contract:
+## Capabilities
 
-- Service UUID: `7f5a0000-0f23-4b6a-9f5e-3c2a9f7e0100`
-- MAC read: `7f5a0001-0f23-4b6a-9f5e-3c2a9f7e0100`
-- Wi-Fi config write: `7f5a0002-0f23-4b6a-9f5e-3c2a9f7e0100`
-- Provision status: `7f5a0003-0f23-4b6a-9f5e-3c2a9f7e0100`
-
-Wi-Fi is written as JSON:
-
-```json
-{"ssid":"Classroom WiFi","password":"secret"}
-```
-
-Status values:
-
-- `received`
-- `connecting`
-- `connected`
-- `failed`
+A device doesn't register a per-product profile. It reports the generic capability IDs it supports
+(from `lib/meo/define/Meo3_Cmd.h`) during provisioning; the gateway's `MeoCmd` catalog is kept in
+sync with this file value-for-value. See the firmware development guide's "Capability Reporting"
+section for the full contract.
 
 ## Examples
 
@@ -81,6 +73,11 @@ Status values:
 - `examples/02_button_event`
 - `examples/03_temperature_reading`
 
-## Advanced use
+> These examples predate the capability-based API above and still call `onCommand` /
+> `sendReading` / `sendEvent`, which no longer exist on `MeoDevice`. `src/main.cpp` is the sketch
+> that matches the current library; the examples are due for an update to match.
 
-The library still exposes lower-level callbacks for feature calls and MQTT-facing behavior, but the beginner API should be the default for student projects.
+## Docs
+
+- `docs/key_concepts.md` — beginner mental model and full API reference
+- `meo-3-open-service/docs/firmware_development_guide.md` — authoritative BLE provisioning contract
