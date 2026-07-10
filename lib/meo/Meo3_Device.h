@@ -8,6 +8,8 @@
 #include "storage/Meo3_Storage.h"
 #include "ble/Meo3_Ble.h"
 #include "provision/Meo3_BleProvision.h"
+#include "mqtt/Meo3_Mqtt.h"
+#include "messaging/Meo3_Messaging.h"
 
 class MeoDevice {
 public:
@@ -40,16 +42,35 @@ public:
     // or 0 if out is too small.
     size_t buildCapabilityPayload(char* out, size_t cap) const;
 
+    // Register a command handler for an actuator / generic capability
+    // (MEO_WRITE_* / MEO_CMD_*). Call in setup(), before begin(). Also
+    // declares the capability, except for the implicit MEO_CMD_* range.
+    bool onCommand(uint16_t cap, MeoMessaging::MeoWriteHandler fn);
+
+    // Register a read handler for a sensor capability (MEO_READ_*); its return
+    // value is carried in the reply. Also declares the capability.
+    bool onRead(uint16_t cap, MeoMessaging::MeoReadHandler fn);
+
+    // Publish an unsolicited reading/event ({"cap":..,"value":..}). Returns
+    // false while messaging is offline. Both names publish to the same topic.
+    bool sendReading(uint16_t cap, double value);
+    bool sendEvent(uint16_t cap, double value);
+
     // Override Wi-Fi upfront (development / bypass provisioning)
     void beginWifi(const char* ssid, const char* pass);
 
+    // Override the MQTT broker upfront (development / bypass provisioning).
+    // Normally the broker comes from storage, written during BLE provisioning.
+    void setBroker(const char* host, uint16_t port = 1883);
+
     // Lifecycle
     bool begin();   // Init storage, BLE, provisioning service; connect if already provisioned
-    void loop();    // Drive provisioning; detect Wi-Fi connect; stop BLE when online
+    void loop();    // Drive provisioning; detect Wi-Fi connect; stop BLE when online; run messaging
 
     // Status
     bool isProvisioned() const;      // Wi-Fi connected and MAC identity set
     bool isWifiConnected() const { return _wifiReady; }
+    bool isMqttConnected() { return _messaging.isConnected(); }
 
 private:
     const char* _model;
@@ -69,15 +90,25 @@ private:
     MeoStorage      _storage;
     MeoBle          _ble;
     MeoBleProvision _prov;
+    MeoMqttClient   _mqtt;
+    MeoMessaging    _messaging;
+
+    // Development broker override (setBroker); normally loaded from storage
+    const char* _brokerHostOverride = nullptr;
+    uint16_t    _brokerPortOverride = 1883;
+    std::string _storedBrokerHost;
 
     bool _wifiReady  = false;
     bool _bleActive  = false;
+    bool _messagingStarted = false;  // start attempted (one-shot)
+    bool _messagingActive  = false;  // started successfully; _messaging.loop() runs
 
     MeoLogFunction _logger = nullptr;
     char           _debugTags[96] = {0};
 
     bool _tryConnectStoredWifi();
     void _ensureMacIdentity();
+    void _startMessaging();
     bool _debugTagEnabled(const char* tag) const;
     void _log(const char* level, const char* tag, const char* msg) const;
     void _logf(const char* level, const char* tag, const char* fmt, ...) const;

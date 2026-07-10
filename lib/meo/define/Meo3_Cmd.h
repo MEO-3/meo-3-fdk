@@ -1,14 +1,25 @@
 #pragma once
 
-// This cmd combine to the byte payload
-// Payload format: [cmd] [number_define (uint_8)] [value (2 byte)]
-// Block cmd contain 2 bytes, number define unsigned 1 byte, and value is 2 byte, value base on command to be signed or unsigned
+// Shared command catalog — must stay value-for-value in sync with the gateway's
+// MeoCmd.java. Capability ids are exchanged as plain integers (BLE capability
+// report, MQTT command/event payloads — see mqtt_messaging.md).
+//
+// The id range encodes the action; there is no separate verb field:
+// - MEO_CMD_*   generic device commands every firmware supports implicitly
+//               (not declared during provisioning)
+// - MEO_EVENT_* edge-triggered events the device emits unsolicited
+// - MEO_READ_*  readable sensor values
+// - MEO_WRITE_* actuator writes (single scalar value; multi-parameter
+//               actuators pack into one int, e.g. LED_RGB takes 0xRRGGBB)
 #define MEO_CMD_GENERIC             0x0001
 #define MEO_CMD_WRITE               0x0002
 #define MEO_CMD_READ                0x0003
 #define MEO_CMD_EXECUTE             0x0004
 #define MEO_CMD_EXECUTE_WITH_VAR    0x0005
 #define MEO_CMD_STOP                0x0006
+
+#define MEO_EVENT_GENERIC           0xE000
+#define MEO_EVENT_BUTTON            0xE001
 
 #define MEO_READ_GENERIC            0xF000
 #define MEO_READ_TEMP               0xF001

@@ -71,6 +71,31 @@ size_t MeoDevice::buildCapabilityPayload(char* out, size_t cap) const {
     return len + (size_t)t;
 }
 
+bool MeoDevice::onCommand(uint16_t cap, MeoMessaging::MeoWriteHandler fn) {
+    // MEO_CMD_* generic commands (below 0x1000) are implicit — every firmware
+    // supports them, they are never declared during provisioning.
+    if (cap >= 0x1000) addCapability(cap);
+    return _messaging.onCommand(cap, fn);
+}
+
+bool MeoDevice::onRead(uint16_t cap, MeoMessaging::MeoReadHandler fn) {
+    if (cap >= 0x1000) addCapability(cap);
+    return _messaging.onRead(cap, fn);
+}
+
+bool MeoDevice::sendReading(uint16_t cap, double value) {
+    return _messaging.sendEvent(cap, value);
+}
+
+bool MeoDevice::sendEvent(uint16_t cap, double value) {
+    return _messaging.sendEvent(cap, value);
+}
+
+void MeoDevice::setBroker(const char* host, uint16_t port) {
+    _brokerHostOverride = host;
+    _brokerPortOverride = port;
+}
+
 void MeoDevice::beginWifi(const char* ssid, const char* pass) {
     _wifiSsid = ssid;
     _wifiPass = pass;
@@ -144,6 +169,49 @@ void MeoDevice::loop() {
         _bleActive = false;
         _logf("INFO", "DEVICE", "Provisioned [%s]; BLE advertising stopped", _deviceId.c_str());
     }
+
+    // Once online, start MQTT messaging (one attempt) and keep driving it
+    if (_wifiReady && !_messagingStarted) {
+        _startMessaging();
+    }
+    if (_messagingActive) {
+        _messaging.loop();
+    }
+}
+
+// Wire the MQTT transport + messaging once Wi-Fi is up. Broker comes from the
+// setBroker() override (development) or storage, written during BLE
+// provisioning. Missing broker info leaves messaging off — the device still
+// runs, so a re-provision can fix it.
+void MeoDevice::_startMessaging() {
+    _messagingStarted = true;
+
+    const char* host = _brokerHostOverride;
+    uint16_t port = _brokerPortOverride;
+    if (!host) {
+        if (!_storage.loadString("mq_host", _storedBrokerHost) || _storedBrokerHost.empty()) {
+            _log("WARN", "DEVICE", "No broker info stored; messaging disabled (re-provision or setBroker)");
+            return;
+        }
+        host = _storedBrokerHost.c_str();
+        int16_t storedPort = 0;
+        port = _storage.loadShort("mq_port", storedPort) ? (uint16_t)storedPort : 1883;
+    }
+
+    _mqtt.setLogger(_logger);
+    _mqtt.setDebugTags(_debugTags);
+    _mqtt.configure(host, port);
+    _mqtt.setCredentials(_deviceId.c_str(), nullptr); // MAC as MQTT client id; no auth yet
+
+    _messaging.setLogger(_logger);
+    _messaging.setDebugTags(_debugTags);
+    if (!_messaging.begin(&_mqtt, _deviceId.c_str())) {
+        _log("ERROR", "DEVICE", "Messaging init failed");
+        return;
+    }
+
+    _messagingActive = true;
+    _logf("INFO", "DEVICE", "Messaging starting (broker %s:%u)", host, (unsigned)port);
 }
 
 bool MeoDevice::isProvisioned() const {
@@ -175,8 +243,10 @@ void MeoDevice::_ensureMacIdentity() {
     if (esp_read_mac(mac, ESP_MAC_WIFI_STA) != ESP_OK) {
         esp_read_mac(mac, ESP_MAC_ETH);
     }
+    // Lowercase hex, no separators — directly usable in MQTT topics
+    // (mqtt_messaging.md "Identities")
     char buf[13];
-    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X",
+    snprintf(buf, sizeof(buf), "%02x%02x%02x%02x%02x%02x",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     _deviceId = buf;
 }
