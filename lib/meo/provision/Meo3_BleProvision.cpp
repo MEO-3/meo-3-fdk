@@ -140,11 +140,11 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
     if (!ch || !ch->getUUID().equals(NimBLEUUID(CH_UUID_WIFI_CONFIG))) return;
 
     std::string payload = ch->getValue();
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
     DeserializationError err = deserializeJson(doc, payload.c_str(), payload.size());
     if (err) {
-        _setStatusJson("failed", "Invalid Wi-Fi config JSON");
-        MeoLog("ERROR", "PROV", "Invalid Wi-Fi config JSON");
+        _setStatusJson("failed", "Invalid network config JSON");
+        MeoLog("ERROR", "PROV", "Invalid network config JSON");
         return;
     }
 
@@ -156,18 +156,28 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
         return;
     }
 
+    const char* brokerHost = doc["brokerHost"] | "";
+    uint16_t brokerPort = doc["brokerPort"] | 1883;
+    if (!brokerHost[0]) {
+        _setStatusJson("failed", "broker host is required");
+        MeoLog("ERROR", "PROV", "broker host is required");
+        return;
+    }
+
     _pendingSsid = ssid;
     _pendingPassword = password ? password : "";
     if (!_storage->saveString("wifi_ssid", _pendingSsid) ||
-        !_storage->saveString("wifi_pass", _pendingPassword)) {
-        _setStatusJson("failed", "Could not save Wi-Fi config");
-        MeoLog("ERROR", "PROV", "Could not save Wi-Fi config");
+        !_storage->saveString("wifi_pass", _pendingPassword) ||
+        !_storage->saveString("mq_host", std::string(brokerHost)) ||
+        !_storage->saveShort("mq_port", (int16_t)brokerPort)) {
+        _setStatusJson("failed", "Could not save network config");
+        MeoLog("ERROR", "PROV", "Could not save network config");
         return;
     }
 
     _setStatusJson("received");
     _wifiConfigPending = true;
-    MeoLog("INFO", "PROV", "Wi-Fi config received");
+    MeoLogf("INFO", "PROV", "Network config received (broker %s:%u)", brokerHost, (unsigned)brokerPort);
 }
 
 bool MeoBleProvision::_debugTagEnabled(const char* tag) const {
