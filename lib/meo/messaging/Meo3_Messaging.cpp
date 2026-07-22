@@ -1,8 +1,48 @@
 #include "Meo3_Messaging.h"
 #include "../define/Meo3_CmdErr.h"
-#include <ArduinoJson.h>
 #include <stdarg.h>
 #include <string.h>
+
+// Frame sizes per mqtt_messaging.md — fixed, little-endian, no framing.
+static const unsigned int COMMAND_FRAME_SIZE = 8;
+static const unsigned int REPLY_FRAME_SIZE = 10;
+static const unsigned int EVENT_FRAME_SIZE = 6;
+
+static void writeU16LE(uint8_t* buf, uint16_t v) {
+    buf[0] = (uint8_t)(v & 0xFF);
+    buf[1] = (uint8_t)((v >> 8) & 0xFF);
+}
+
+static uint16_t readU16LE(const uint8_t* buf) {
+    return (uint16_t)(buf[0] | (buf[1] << 8));
+}
+
+static void writeI32LE(uint8_t* buf, int32_t v) {
+    uint32_t u = (uint32_t)v;
+    buf[0] = (uint8_t)(u & 0xFF);
+    buf[1] = (uint8_t)((u >> 8) & 0xFF);
+    buf[2] = (uint8_t)((u >> 16) & 0xFF);
+    buf[3] = (uint8_t)((u >> 24) & 0xFF);
+}
+
+static int32_t readI32LE(const uint8_t* buf) {
+    uint32_t u = (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) |
+                 ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
+    return (int32_t)u;
+}
+
+static void writeF32LE(uint8_t* buf, float v) {
+    uint32_t bits;
+    memcpy(&bits, &v, sizeof(bits));
+    writeI32LE(buf, (int32_t)bits);
+}
+
+static float readF32LE(const uint8_t* buf) {
+    uint32_t bits = (uint32_t)readI32LE(buf);
+    float v;
+    memcpy(&v, &bits, sizeof(v));
+    return v;
+}
 
 void MeoMessaging::setLogger(MeoLogFunction logger) {
     _logger = logger;
@@ -80,13 +120,10 @@ bool MeoMessaging::isConnected() {
 
 bool MeoMessaging::sendEvent(uint16_t cap, double value) {
     if (!isConnected()) return false;
-    StaticJsonDocument<96> doc;
-    doc["cap"] = cap;
-    doc["value"] = value;
-    char buf[96];
-    size_t len = serializeJson(doc, buf, sizeof(buf));
-    if (len == 0) return false;
-    return _mqtt->publish(_topicEvent, buf, false);
+    uint8_t buf[EVENT_FRAME_SIZE];
+    writeU16LE(buf, cap);
+    writeF32LE(buf + 2, (float)value);
+    return _mqtt->publish(_topicEvent, buf, sizeof(buf), false);
 }
 
 void MeoMessaging::_onMessageStatic(const char* topic, const uint8_t* payload, unsigned int length, void* ctx) {
@@ -96,20 +133,15 @@ void MeoMessaging::_onMessageStatic(const char* topic, const uint8_t* payload, u
 }
 
 void MeoMessaging::_handleCommand(const uint8_t* payload, unsigned int length) {
-    StaticJsonDocument<192> doc;
-    DeserializationError err = deserializeJson(doc, payload, length);
-    if (err) {
-        _log("WARN", "MSG", "Dropping malformed command JSON");
+    if (length != COMMAND_FRAME_SIZE) {
+        _logf("WARN", "MSG", "Dropping command: bad length %u", length);
         return;
     }
 
-    const char* requestId = doc["requestId"] | "";
-    if (!requestId[0]) {
-        _log("WARN", "MSG", "Dropping command without requestId");
-        return;
-    }
+    uint16_t requestId = readU16LE(payload);
+    uint16_t cap = readU16LE(payload + 2);
+    int32_t value = readI32LE(payload + 4);
 
-    uint16_t cap = doc["cap"] | 0;
     if (cap == 0) {
         _replyError(requestId, MEO_ERR_BAD_REQUEST);
         return;
@@ -124,7 +156,6 @@ void MeoMessaging::_handleCommand(const uint8_t* payload, unsigned int length) {
 
     for (uint8_t i = 0; i < _writeCount; ++i) {
         if (_writeCaps[i] == cap) {
-            int32_t value = doc["value"] | 0;
             if (_writeFns[i](value)) {
                 _replyOkInt(requestId, cap, value);
             } else {
@@ -138,36 +169,34 @@ void MeoMessaging::_handleCommand(const uint8_t* payload, unsigned int length) {
     _replyError(requestId, MEO_ERR_UNKNOWN_CAP);
 }
 
-void MeoMessaging::_replyOkInt(const char* requestId, uint16_t cap, int32_t value) {
-    StaticJsonDocument<192> doc;
-    doc["requestId"] = requestId;
-    doc["ok"] = true;
-    doc["cap"] = cap;
-    doc["value"] = value;
-    char buf[192];
-    if (serializeJson(doc, buf, sizeof(buf)) == 0) return;
-    _mqtt->publish(_topicReply, buf, false);
+void MeoMessaging::_replyOkInt(uint16_t requestId, uint16_t cap, int32_t value) {
+    uint8_t buf[REPLY_FRAME_SIZE];
+    writeU16LE(buf, requestId);
+    buf[2] = 1;
+    writeU16LE(buf + 3, cap);
+    writeI32LE(buf + 5, value);
+    buf[9] = 0;
+    _mqtt->publish(_topicReply, buf, sizeof(buf), false);
 }
 
-void MeoMessaging::_replyOkDouble(const char* requestId, uint16_t cap, double value) {
-    StaticJsonDocument<192> doc;
-    doc["requestId"] = requestId;
-    doc["ok"] = true;
-    doc["cap"] = cap;
-    doc["value"] = value;
-    char buf[192];
-    if (serializeJson(doc, buf, sizeof(buf)) == 0) return;
-    _mqtt->publish(_topicReply, buf, false);
+void MeoMessaging::_replyOkDouble(uint16_t requestId, uint16_t cap, double value) {
+    uint8_t buf[REPLY_FRAME_SIZE];
+    writeU16LE(buf, requestId);
+    buf[2] = 1;
+    writeU16LE(buf + 3, cap);
+    writeF32LE(buf + 5, (float)value);
+    buf[9] = 0;
+    _mqtt->publish(_topicReply, buf, sizeof(buf), false);
 }
 
-void MeoMessaging::_replyError(const char* requestId, int error) {
-    StaticJsonDocument<192> doc;
-    doc["requestId"] = requestId;
-    doc["ok"] = false;
-    doc["error"] = error;
-    char buf[192];
-    if (serializeJson(doc, buf, sizeof(buf)) == 0) return;
-    _mqtt->publish(_topicReply, buf, false);
+void MeoMessaging::_replyError(uint16_t requestId, int error) {
+    uint8_t buf[REPLY_FRAME_SIZE];
+    writeU16LE(buf, requestId);
+    buf[2] = 0;
+    writeU16LE(buf + 3, 0);
+    writeI32LE(buf + 5, 0);
+    buf[9] = (uint8_t)error;
+    _mqtt->publish(_topicReply, buf, sizeof(buf), false);
 }
 
 bool MeoMessaging::_debugTagEnabled(const char* tag) const {

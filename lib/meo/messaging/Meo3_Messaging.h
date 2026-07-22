@@ -8,6 +8,7 @@
  * MeoMessaging: runtime MQTT messaging per
  * meo-3-open-service/docs/mqtt_messaging.md.
  * - Owns the device topic namespace (command/reply/event)
+ * - Parses/builds the fixed-size little-endian binary frames (no JSON)
  * - Dispatches incoming commands to registered capability handlers
  * - Builds and publishes the reply for every command
  * - Publishes unsolicited events/readings
@@ -41,7 +42,8 @@ public:
 
     bool isConnected();
 
-    // Publish {"cap":..,"value":..} to the event topic (readings + events).
+    // Publish the 6-byte event frame (cap + float32 value) to the event topic
+    // (readings + events).
     bool sendEvent(uint16_t cap, double value);
 
 private:
@@ -72,9 +74,9 @@ private:
     static void _onMessageStatic(const char* topic, const uint8_t* payload, unsigned int length, void* ctx);
     void _handleCommand(const uint8_t* payload, unsigned int length);
 
-    void _replyOkInt(const char* requestId, uint16_t cap, int32_t value);
-    void _replyOkDouble(const char* requestId, uint16_t cap, double value);
-    void _replyError(const char* requestId, int error);
+    void _replyOkInt(uint16_t requestId, uint16_t cap, int32_t value);
+    void _replyOkDouble(uint16_t requestId, uint16_t cap, double value);
+    void _replyError(uint16_t requestId, int error);
 
     bool _debugTagEnabled(const char* tag) const;
     void _log(const char* level, const char* tag, const char* msg) const;
