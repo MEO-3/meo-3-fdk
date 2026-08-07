@@ -25,17 +25,10 @@
   "platforms": ["espressif32"],
   "export": {
     "include": [
-      "Meo3.h",
-      "Meo3_Device.h",
-      "Meo3_Type.h",
-      "src/**",
       "lib/**",
       "examples/**",
       "library.json",
       "README.md"
-    ],
-    "exclude": [
-      "src/main.cpp"
     ]
   }
 }

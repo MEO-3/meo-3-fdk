@@ -41,10 +41,6 @@ void setup() {
 
     Serial.println("\n=== MEO Provisioning + Messaging Test ===");
 
-    meo.setLogger([](const char* level, const char* message) {
-        Serial.printf("[%s] %s\n", level, message);
-    });
-    meo.setDebugTags("DEVICE,PROV,MQTT,MSG");
 
     // Handlers registered before begin() double as capability declarations —
     // the gateway reads the declared set off the BLE capability characteristic
