@@ -44,23 +44,13 @@ static float readF32LE(const uint8_t* buf) {
     return v;
 }
 
-void MeoMessaging::setLogger(MeoLogFunction logger) {
-    _logger = logger;
-}
-
-void MeoMessaging::setDebugTags(const char* tagsCsv) {
-    if (!tagsCsv) { _debugTags[0] = '\0'; return; }
-    strncpy(_debugTags, tagsCsv, sizeof(_debugTags) - 1);
-    _debugTags[sizeof(_debugTags) - 1] = '\0';
-}
-
 bool MeoMessaging::onCommand(uint16_t cap, MeoWriteHandler fn) {
     if (!fn) return false;
     for (uint8_t i = 0; i < _writeCount; ++i) {
         if (_writeCaps[i] == cap) { _writeFns[i] = fn; return true; }
     }
     if (_writeCount >= MEO_MAX_HANDLERS) {
-        _logf("WARN", "MSG", "Command handler table full; ignoring 0x%04X", cap);
+        logw("MSG", "Command handler table full; ignoring 0x%04X", cap);
         return false;
     }
     _writeCaps[_writeCount] = cap;
@@ -75,7 +65,7 @@ bool MeoMessaging::onRead(uint16_t cap, MeoReadHandler fn) {
         if (_readCaps[i] == cap) { _readFns[i] = fn; return true; }
     }
     if (_readCount >= MEO_MAX_HANDLERS) {
-        _logf("WARN", "MSG", "Read handler table full; ignoring 0x%04X", cap);
+        logw("MSG", "Read handler table full; ignoring 0x%04X", cap);
         return false;
     }
     _readCaps[_readCount] = cap;
@@ -108,7 +98,7 @@ void MeoMessaging::loop() {
     if (!_subscribed) {
         // Clean session on every connect, so (re)subscribe each time
         _subscribed = _mqtt->subscribe(_topicCommand, 1);
-        if (_subscribed) _logf("INFO", "MSG", "Messaging online (%s)", _topicCommand);
+        if (_subscribed) logi("MSG", "Messaging online (%s)", _topicCommand);
     }
 
     _mqtt->loop();
@@ -134,7 +124,7 @@ void MeoMessaging::_onMessageStatic(const char* topic, const uint8_t* payload, u
 
 void MeoMessaging::_handleCommand(const uint8_t* payload, unsigned int length) {
     if (length != COMMAND_FRAME_SIZE) {
-        _logf("WARN", "MSG", "Dropping command: bad length %u", length);
+        logw("MSG", "Dropping command: bad length %u", length);
         return;
     }
 
@@ -165,7 +155,7 @@ void MeoMessaging::_handleCommand(const uint8_t* payload, unsigned int length) {
         }
     }
 
-    _logf("WARN", "MSG", "No handler for cap 0x%04X", cap);
+    logw("MSG", "No handler for cap 0x%04X", cap);
     _replyError(requestId, MEO_ERR_UNKNOWN_CAP);
 }
 
@@ -199,29 +189,3 @@ void MeoMessaging::_replyError(uint16_t requestId, int error) {
     _mqtt->publish(_topicReply, buf, sizeof(buf), false);
 }
 
-bool MeoMessaging::_debugTagEnabled(const char* tag) const {
-    if (!_debugTags[0]) return false;
-    const char* p = strstr(_debugTags, tag);
-    if (!p) return false;
-    bool leftOk  = (p == _debugTags) || (*(p - 1) == ',');
-    const char* end = p + strlen(tag);
-    bool rightOk = (*end == '\0') || (*end == ',');
-    return leftOk && rightOk;
-}
-
-void MeoMessaging::_log(const char* level, const char* tag, const char* msg) const {
-    if (!_logger) return;
-    char buf[256];
-    snprintf(buf, sizeof(buf), "[%s] %s", tag ? tag : "MSG", msg ? msg : "");
-    _logger(level, buf);
-}
-
-void MeoMessaging::_logf(const char* level, const char* tag, const char* fmt, ...) const {
-    if (!_logger) return;
-    char msg[192];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(msg, sizeof(msg), fmt, ap);
-    va_end(ap);
-    _log(level, tag, msg);
-}

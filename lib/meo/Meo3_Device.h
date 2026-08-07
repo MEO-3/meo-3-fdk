@@ -3,8 +3,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <string>
+#include "Meo3_Logger.h"
 
-#include "Meo3_Type.h"
 #include "storage/Meo3_Storage.h"
 #include "ble/Meo3_Ble.h"
 #include "provision/Meo3_BleProvision.h"
@@ -15,11 +15,7 @@ class MeoDevice {
 public:
     MeoDevice();
     MeoDevice(const char* model);
-
-    // Logging
-    void setLogger(MeoLogFunction logger);
     // CSV of tags to enable DEBUG logs for (e.g. "DEVICE,PROV")
-    void setDebugTags(const char* tagsCsv);
 
     // Device model and manufacturer. The model is reported to the gateway in
     // the capability report; the human-facing device name lives on the gateway,
@@ -103,13 +99,8 @@ private:
     bool _messagingStarted = false;  // start attempted (one-shot)
     bool _messagingActive  = false;  // started successfully; _messaging.loop() runs
 
-    MeoLogFunction _logger = nullptr;
-    char           _debugTags[96] = {0};
 
     bool _tryConnectStoredWifi();
     void _ensureMacIdentity();
     void _startMessaging();
-    bool _debugTagEnabled(const char* tag) const;
-    void _log(const char* level, const char* tag, const char* msg) const;
-    void _logf(const char* level, const char* tag, const char* fmt, ...) const;
 };

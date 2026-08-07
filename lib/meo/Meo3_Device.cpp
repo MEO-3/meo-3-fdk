@@ -17,18 +17,6 @@ MeoDevice::MeoDevice(const char* model)
       _wifiSsid(nullptr),
       _wifiPass(nullptr) {}
 
-void MeoDevice::setLogger(MeoLogFunction logger) {
-    _logger = logger;
-    _prov.setLogger(logger);
-}
-
-void MeoDevice::setDebugTags(const char* tagsCsv) {
-    if (!tagsCsv) { _debugTags[0] = '\0'; return; }
-    strncpy(_debugTags, tagsCsv, sizeof(_debugTags) - 1);
-    _debugTags[sizeof(_debugTags) - 1] = '\0';
-    _prov.setDebugTags(tagsCsv);
-}
-
 void MeoDevice::setDeviceInfo(const char* model, const char* manufacturer) {
     if (model && model[0]) _model = model;
     _manufacturer = manufacturer;
@@ -40,7 +28,7 @@ void MeoDevice::setFirmwareVersion(const char* version) {
 
 void MeoDevice::addCapability(uint16_t capabilityId) {
     if (_capabilityCount >= MEO_MAX_CAPABILITIES) {
-        _logf("WARN", "DEVICE", "Capability list full; ignoring 0x%04X", capabilityId);
+        logw("DEVICE", "Capability list full; ignoring 0x%04X", capabilityId);
         return;
     }
     for (uint8_t i = 0; i < _capabilityCount; ++i) {
@@ -99,7 +87,7 @@ void MeoDevice::setBroker(const char* host, uint16_t port) {
 void MeoDevice::beginWifi(const char* ssid, const char* pass) {
     _wifiSsid = ssid;
     _wifiPass = pass;
-    _logf("INFO", "DEVICE", "Connecting WiFi SSID=%s", ssid ? ssid : "");
+    logi("DEVICE", "Connecting WiFi SSID=%s", ssid ? ssid : "");
     WiFi.mode(WIFI_STA);
     WiFi.begin(_wifiSsid, _wifiPass);
     uint32_t start = millis();
@@ -107,31 +95,32 @@ void MeoDevice::beginWifi(const char* ssid, const char* pass) {
         delay(100);
     }
     _wifiReady = (WiFi.status() == WL_CONNECTED);
-    _logf(_wifiReady ? "INFO" : "ERROR", "DEVICE", "WiFi %s", _wifiReady ? "connected" : "failed");
+    if (_wifiReady) {
+        logi("DEVICE", "WiFi connected");
+    } else {
+        loge("DEVICE", "WiFi failed");
+    }
 }
 
 bool MeoDevice::begin() {
     if (!_storage.begin()) {
-        _log("ERROR", "DEVICE", "Storage init failed");
+        loge("DEVICE", "Storage init failed");
         return false;
     }
 
     std::string setupName = "MEO-Setup-";
     setupName += _model ? _model : "Device";
     if (!_ble.begin(setupName.c_str())) {
-        _log("ERROR", "DEVICE", "BLE init failed");
+        loge("DEVICE", "BLE init failed");
         return false;
     }
-
-    _prov.setLogger(_logger);
-    _prov.setDebugTags(_debugTags);
 
     char capPayload[384];
     if (buildCapabilityPayload(capPayload, sizeof(capPayload)) == 0) capPayload[0] = '\0';
     _prov.setCapabilities(capPayload);
 
     if (!_prov.begin(&_ble, &_storage, _model)) {
-        _log("ERROR", "DEVICE", "BLE provisioning init failed");
+        loge("DEVICE", "BLE provisioning init failed");
         return false;
     }
 
@@ -145,11 +134,11 @@ bool MeoDevice::begin() {
     if (_wifiReady) {
         _prov.setProvisionState("connected");
         _prov.stopAdvertising();
-        _logf("INFO", "DEVICE", "Already provisioned [%s]; skipping BLE advertising", _deviceId.c_str());
+        logi("DEVICE", "Already provisioned [%s]; skipping BLE advertising", _deviceId.c_str());
     } else {
         _prov.startAdvertising();
         _bleActive = true;
-        _log("INFO", "DEVICE", "BLE provisioning started; waiting for Wi-Fi config");
+        logi("DEVICE", "BLE provisioning started; waiting for Wi-Fi config");
     }
 
     return true;
@@ -167,7 +156,7 @@ void MeoDevice::loop() {
         _prov.setProvisionState("connected");
         _prov.stopAdvertising();
         _bleActive = false;
-        _logf("INFO", "DEVICE", "Provisioned [%s]; BLE advertising stopped", _deviceId.c_str());
+        logi("DEVICE", "Provisioned [%s]; BLE advertising stopped", _deviceId.c_str());
     }
 
     // Once online, start MQTT messaging (one attempt) and keep driving it
@@ -190,28 +179,22 @@ void MeoDevice::_startMessaging() {
     uint16_t port = _brokerPortOverride;
     if (!host) {
         if (!_storage.loadString("mq_host", _storedBrokerHost) || _storedBrokerHost.empty()) {
-            _log("WARN", "DEVICE", "No broker info stored; messaging disabled (re-provision or setBroker)");
+            logw("DEVICE", "No broker info stored; messaging disabled (re-provision or setBroker)");
             return;
         }
         host = _storedBrokerHost.c_str();
         int16_t storedPort = 0;
         port = _storage.loadShort("mq_port", storedPort) ? (uint16_t)storedPort : 1883;
     }
-
-    _mqtt.setLogger(_logger);
-    _mqtt.setDebugTags(_debugTags);
     _mqtt.configure(host, port);
     _mqtt.setCredentials(_deviceId.c_str(), nullptr); // MAC as MQTT client id; no auth yet
-
-    _messaging.setLogger(_logger);
-    _messaging.setDebugTags(_debugTags);
     if (!_messaging.begin(&_mqtt, _deviceId.c_str())) {
-        _log("ERROR", "DEVICE", "Messaging init failed");
+        loge("DEVICE", "Messaging init failed");
         return;
     }
 
     _messagingActive = true;
-    _logf("INFO", "DEVICE", "Messaging starting (broker %s:%u)", host, (unsigned)port);
+    logi("DEVICE", "Messaging starting (broker %s:%u)", host, (unsigned)port);
 }
 
 bool MeoDevice::isProvisioned() const {
@@ -225,7 +208,7 @@ bool MeoDevice::_tryConnectStoredWifi() {
     if (!_storage.loadString("wifi_ssid", ssid) || ssid.empty()) return false;
     _storage.loadString("wifi_pass", pass);
 
-    _logf("INFO", "DEVICE", "Connecting stored WiFi SSID=%s", ssid.c_str());
+    logi("DEVICE", "Connecting stored WiFi SSID=%s", ssid.c_str());
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
     uint32_t start = millis();
@@ -233,7 +216,11 @@ bool MeoDevice::_tryConnectStoredWifi() {
         delay(100);
     }
     bool connected = (WiFi.status() == WL_CONNECTED);
-    _logf(connected ? "INFO" : "WARN", "DEVICE", "Stored WiFi %s", connected ? "connected" : "failed");
+    if (connected) {
+        logi("DEVICE", "Stored WiFi connected");
+    } else {
+        logw("DEVICE", "Stored WiFi failed");
+    }
     return connected;
 }
 
@@ -251,29 +238,3 @@ void MeoDevice::_ensureMacIdentity() {
     _deviceId = buf;
 }
 
-bool MeoDevice::_debugTagEnabled(const char* tag) const {
-    if (!_debugTags[0]) return false;
-    const char* p = strstr(_debugTags, tag);
-    if (!p) return false;
-    bool leftOk  = (p == _debugTags) || (*(p - 1) == ',');
-    const char* end = p + strlen(tag);
-    bool rightOk = (*end == '\0') || (*end == ',');
-    return leftOk && rightOk;
-}
-
-void MeoDevice::_log(const char* level, const char* tag, const char* msg) const {
-    if (!_logger) return;
-    char buf[256];
-    snprintf(buf, sizeof(buf), "[%s] %s", tag ? tag : "DEVICE", msg ? msg : "");
-    _logger(level, buf);
-}
-
-void MeoDevice::_logf(const char* level, const char* tag, const char* fmt, ...) const {
-    if (!_logger) return;
-    char msg[192];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(msg, sizeof(msg), fmt, ap);
-    va_end(ap);
-    _log(level, tag, msg);
-}

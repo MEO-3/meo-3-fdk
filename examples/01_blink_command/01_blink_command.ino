@@ -37,9 +37,6 @@ void setup()
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 
-    meo.setLogger([](const char *level, const char *message)
-                  { Serial.printf("[%s] %s\n", level, message); });
-    meo.setDebugTags("DEVICE,PROV,MQTT,MSG");
 
     // Registering the handler also declares the capability, which is what the
     // gateway reads off the BLE capability characteristic while provisioning.

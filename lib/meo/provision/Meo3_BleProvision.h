@@ -3,9 +3,9 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <string>
+#include "../Meo3_Logger.h"
 #include "../storage/Meo3_Storage.h"
 #include "../ble/Meo3_Ble.h"
-#include "../Meo3_Type.h" // MeoLogFunction
 
 // MEO open-service provisioning contract.
 #define MEO_BLE_PROV_SERV_UUID      "7f5a0000-0f23-4b6a-9f5e-3c2a9f7e0100"
@@ -17,11 +17,6 @@
 class MeoBleProvision {
 public:
     MeoBleProvision() = default;
-
-    // Logging
-    void setLogger(MeoLogFunction logger);
-    void setDebugTags(const char* tagsCsv); // enables DEBUG for "PROV" when tag present
-
     bool begin(MeoBle* ble, MeoStorage* storage, const char* deviceName);
 
     // Set the capability report served over the read-only capability
@@ -56,11 +51,6 @@ private:
     char                _statusBuf[96] = {0};
     bool                _wifiConfigPending = false;
     bool                _wifiConnectRunning = false;
-
-    // Logging
-    MeoLogFunction _logger = nullptr;
-    char           _debugTags[96] = {0};
-
     // Internal lifecycle
     bool _createServiceAndCharacteristics();
     void _bindWriteHandlers();
@@ -68,7 +58,6 @@ private:
     void _connectPendingWifi();
     void _setStatusJson(const char* state, const char* message = nullptr);
     std::string _readMacAddress() const;
-    bool _debugTagEnabled(const char* tag) const;
 
     // Write callbacks
     static void _onWriteStatic(NimBLECharacteristic* ch, void* ctx);

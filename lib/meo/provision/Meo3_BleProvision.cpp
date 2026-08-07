@@ -6,16 +6,6 @@
 #include <stdarg.h>
 #include <string>
 
-void MeoBleProvision::setLogger(MeoLogFunction logger) {
-    _logger = logger;
-}
-
-void MeoBleProvision::setDebugTags(const char* tagsCsv) {
-    if (!tagsCsv) { _debugTags[0] = '\0'; return; }
-    strncpy(_debugTags, tagsCsv, sizeof(_debugTags) - 1);
-    _debugTags[sizeof(_debugTags) - 1] = '\0';
-}
-
 bool MeoBleProvision::begin(MeoBle* ble, MeoStorage* storage, const char* deviceName) {
     _ble = ble;
     _storage = storage;
@@ -79,7 +69,7 @@ void MeoBleProvision::_connectPendingWifi() {
     _wifiConnectRunning = true;
 
     _setStatusJson("connecting");
-    MeoLogf("INFO", "PROV", "Connecting Wi-Fi SSID=%s", _pendingSsid.c_str());
+    logi("PROV", "Connecting Wi-Fi SSID=%s", _pendingSsid.c_str());
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(_pendingSsid.c_str(), _pendingPassword.c_str());
@@ -91,11 +81,11 @@ void MeoBleProvision::_connectPendingWifi() {
 
     if (WiFi.status() == WL_CONNECTED) {
         _setStatusJson("connected");
-        MeoLog("INFO", "PROV", "Wi-Fi connected");
+        logi("PROV", "Wi-Fi connected");
         stopAdvertising();
     } else {
         _setStatusJson("failed", "Wi-Fi connection failed");
-        MeoLog("ERROR", "PROV", "Wi-Fi connection failed");
+        loge("PROV", "Wi-Fi connection failed");
         startAdvertising();
     }
 
@@ -144,7 +134,7 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
     DeserializationError err = deserializeJson(doc, payload.c_str(), payload.size());
     if (err) {
         _setStatusJson("failed", "Invalid network config JSON");
-        MeoLog("ERROR", "PROV", "Invalid network config JSON");
+        loge("PROV", "Invalid network config JSON");
         return;
     }
 
@@ -152,7 +142,7 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
     const char* password = doc["password"] | "";
     if (!ssid || !ssid[0]) {
         _setStatusJson("failed", "Wi-Fi SSID is required");
-        MeoLog("ERROR", "PROV", "Wi-Fi SSID is required");
+        loge("PROV", "Wi-Fi SSID is required");
         return;
     }
 
@@ -160,7 +150,7 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
     uint16_t brokerPort = doc["brokerPort"] | 1883;
     if (!brokerHost[0]) {
         _setStatusJson("failed", "broker host is required");
-        MeoLog("ERROR", "PROV", "broker host is required");
+        loge("PROV", "broker host is required");
         return;
     }
 
@@ -171,21 +161,12 @@ void MeoBleProvision::_onWrite(NimBLECharacteristic* ch) {
         !_storage->saveString("mq_host", std::string(brokerHost)) ||
         !_storage->saveShort("mq_port", (int16_t)brokerPort)) {
         _setStatusJson("failed", "Could not save network config");
-        MeoLog("ERROR", "PROV", "Could not save network config");
+        loge("PROV", "Could not save network config");
         return;
     }
 
     _setStatusJson("received");
     _wifiConfigPending = true;
-    MeoLogf("INFO", "PROV", "Network config received (broker %s:%u)", brokerHost, (unsigned)brokerPort);
+    logi("PROV", "Network config received (broker %s:%u)", brokerHost, (unsigned)brokerPort);
 }
 
-bool MeoBleProvision::_debugTagEnabled(const char* tag) const {
-    if (!_debugTags[0]) return false;
-    const char* p = strstr(_debugTags, tag);
-    if (!p) return false;
-    bool leftOk  = (p == _debugTags) || (*(p - 1) == ',');
-    const char* end = p + strlen(tag);
-    bool rightOk = (*end == '\0') || (*end == ',');
-    return leftOk && rightOk;
-}

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include "../Meo3_Logger.h"
 #include "../mqtt/Meo3_Mqtt.h"
-#include "../Meo3_Type.h" // MeoLogFunction
 
 /**
  * MeoMessaging: runtime MQTT messaging per
@@ -22,11 +22,6 @@ public:
     typedef bool (*MeoWriteHandler)(int32_t value);
     // Sensor read handler: returns the value carried in the reply.
     typedef double (*MeoReadHandler)();
-
-    // Logging
-    void setLogger(MeoLogFunction logger);
-    void setDebugTags(const char* tagsCsv); // enables DEBUG for "MSG" when tag present
-
     // Handler registration (call in setup(); fixed-size tables, registering a
     // cap again replaces its handler). Returns false when the table is full.
     bool onCommand(uint16_t cap, MeoWriteHandler fn);
@@ -66,11 +61,6 @@ private:
 
     uint32_t _lastConnectAttempt = 0;
     bool     _subscribed = false;
-
-    // Logging
-    MeoLogFunction _logger = nullptr;
-    char           _debugTags[96] = {0};
-
     static void _onMessageStatic(const char* topic, const uint8_t* payload, unsigned int length, void* ctx);
     void _handleCommand(const uint8_t* payload, unsigned int length);
 
@@ -78,7 +68,4 @@ private:
     void _replyOkDouble(uint16_t requestId, uint16_t cap, double value);
     void _replyError(uint16_t requestId, int error);
 
-    bool _debugTagEnabled(const char* tag) const;
-    void _log(const char* level, const char* tag, const char* msg) const;
-    void _logf(const char* level, const char* tag, const char* fmt, ...) const;
 };

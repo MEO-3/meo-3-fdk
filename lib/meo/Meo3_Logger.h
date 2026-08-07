@@ -1,22 +1,10 @@
+#pragma once
+
 #include <Arduino.h>
-#include <WiFi.h>
-#include <cstdarg>
-#include <string>
 
-inline void MeoLog(const char* level, const char* tag, const char* msg) {
-    char buf[256];
-    snprintf(buf, sizeof(buf), "[%s] %s", tag ? tag : "DEVICE", msg ? msg : "");
-    Serial.print("[");
-    Serial.print(level);
-    Serial.print("] ");
-    Serial.println(buf);
-}
-
-inline void MeoLogf(const char* level, const char* tag, const char* fmt, ...) {
-    char msg[192];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(msg, sizeof(msg), fmt, ap);
-    va_end(ap);
-    MeoLog(level, tag, msg);
-}
+// [LEVEL] [TAG] message. tag must be a string literal — it is concatenated at
+// compile time, so there is no runtime formatting cost for it.
+#define logd(tag, fmt, ...) Serial.printf("[DEBUG] [" tag "] " fmt "\n", ##__VA_ARGS__)
+#define logi(tag, fmt, ...) Serial.printf("[INFO] [" tag "] " fmt "\n", ##__VA_ARGS__)
+#define logw(tag, fmt, ...) Serial.printf("[WARN] [" tag "] " fmt "\n", ##__VA_ARGS__)
+#define loge(tag, fmt, ...) Serial.printf("[ERROR] [" tag "] " fmt "\n", ##__VA_ARGS__)
