@@ -1,4 +1,4 @@
-// ThingCub
+// ThingCube — DHT11 + MPU6050 + SH1106 on a MEO device.
 #include <Arduino.h>
 #include <Meo3.h>
 #include <Wire.h>
@@ -20,44 +20,52 @@ void setup() {
     Wire.begin(SDA_PIN, SCL_PIN);
     dhtBegin();
     if (!mpuBegin()) {
-        Serial.println("[WARN] MPU6050 not found - check wiring/address");
+        logw("CUBE", "MPU6050 not found - check wiring/address");
     }
     if (!oledBegin()) {
-        Serial.println("[WARN] SH1106 not found - check wiring/address");
+        logw("CUBE", "SH1106 not found - check wiring/address");
     }
     oledText("ThingCube", "starting...");
 
     if (!meo.begin()) {
-        Serial.println("[ERROR] begin() failed - halting");
+        loge("CUBE", "begin() failed - halting");
         while (true) {
             delay(1000);
         }
     }
 
-    Serial.println(meo.isProvisioned()
-                       ? "[INFO] Provisioned - waiting for commands"
-                       : "[INFO] Not provisioned - BLE advertising");
+    logi("CUBE", "%s", meo.isProvisioned() ? "Provisioned - waiting for commands"
+                                           : "Not provisioned - BLE advertising");
 }
 
 void loop() {
     meo.loop();
 
-    // Wiring check until the capabilities are wired up: dump both sensors.
     static unsigned long last = 0;
-    if (millis() - last > 2000) {
-        last = millis();
-        Serial.printf("[DHT] %.1fC %.1f%%\n", dhtTemperature(), dhtHumidity());
-
-        MpuReading m{};
-        if (mpuRead(m)) {
-            Serial.printf("[MPU] a=%.2f,%.2f,%.2f g=%.2f,%.2f,%.2f %.1fC\n", m.ax, m.ay, m.az,
-                          m.gx, m.gy, m.gz, m.tempC);
-        }
-
-        char temp[24], humid[24], accel[24];
-        snprintf(temp, sizeof(temp), "Temp  %.1f C", dhtTemperature());
-        snprintf(humid, sizeof(humid), "Humid %.1f %%", dhtHumidity());
-        snprintf(accel, sizeof(accel), "Acc %.1f %.1f %.1f", m.ax, m.ay, m.az);
-        oledText("ThingCube", temp, humid, accel);
+    if (millis() - last < 2000) {
+        return;
     }
+    last = millis();
+
+    // Sensors stay idle until the gateway has provisioned the device.
+    if (!meo.isProvisioned()) {
+        oledText("ThingCube", "Not provisioned", "BLE pairing...");
+        return;
+    }
+
+    // Wiring check until the capabilities are wired up: dump both sensors.
+    float t = dhtTemperature();
+    float h = dhtHumidity();
+    MpuReading m{};
+    mpuRead(m);
+
+    logi("DHT", "%.1fC %.1f%%", t, h);
+    logi("MPU", "a=%.2f,%.2f,%.2f g=%.2f,%.2f,%.2f %.1fC", m.ax, m.ay, m.az, m.gx, m.gy, m.gz,
+         m.tempC);
+
+    char temp[24], humid[24], accel[24];
+    snprintf(temp, sizeof(temp), "Temp  %.1f C", t);
+    snprintf(humid, sizeof(humid), "Humid %.1f %%", h);
+    snprintf(accel, sizeof(accel), "Acc %.1f %.1f %.1f", m.ax, m.ay, m.az);
+    oledText("ThingCube", temp, humid, accel);
 }

@@ -8,6 +8,6 @@
 #define SCL_PIN 9
 
 #define MPU6050_ADDR 0x68 // AD0 low
-#define SH1106_ADDR  0x3D
+#define SH1106_ADDR  0x3C
 
 #define DHT11_PIN 3
